@@ -2,7 +2,18 @@ import { createRouter, createWebHistory } from 'vue-router'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
-  routes: [],
+  routes: [
+    {
+      path: '/',
+      redirect: { name: 'simulacion' },
+    },
+    {
+      path: '/simulacion',
+      name: 'simulacion',
+      component: () => import('../components/renderCajas.vue'),
+      // component: () => import('../views/SimulacionView.vue'),
+    },
+  ],
 })
 
 export default router

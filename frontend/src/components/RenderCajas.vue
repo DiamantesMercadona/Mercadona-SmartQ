@@ -4,26 +4,28 @@
     <button @click="actualizarCajas">TEST</button>
   </div>
 
-  <div v-if="selectedCaja" class="modal-top">
-    <div class="modal">
-      <div class="modal-header">
-        <h2>Caja {{ selectedCaja.id }}</h2>
-        <div :class="['status-badge', selectedCaja.abierta ? 'open' : 'closed']">
-          {{ selectedCaja.abierta ? 'Abierta' : 'Cerrada' }}
+  <div>
+    <div
+      v-for="c in cajas"
+      :key="c.id"
+      class="tooltip"
+      :style="getTooltipStyle(c.id)"
+    >
+      <div class="tooltip-card">
+        <div class="tooltip-header">
+          <strong>Caja {{ c.id }}</strong>
+          <div :class="['status-badge', c.abierta ? 'open' : 'closed']">
+            {{ c.abierta ? 'Abierta' : 'Cerrada' }}
+          </div>
         </div>
-      </div>
-      <div class="modal-content">
-        <div class="info-row">
-          <span class="info-label">👥 Personas en cola:</span>
-          <span class="info-value">{{ selectedCaja.cola }}</span>
-        </div>
+        <div class="tooltip-content">👥 {{ c.cola }} en cola</div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onBeforeUnmount, reactive, computed } from 'vue'
+import { ref, onMounted, onBeforeUnmount, reactive } from 'vue'
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 
@@ -32,8 +34,7 @@ const gtlfCajaPath = '/assets/3dmodels/psx_cashier_stand/scene.gltf'
 const sizeCaja = 1.5
 const separacionCajas = 2.2 + sizeCaja
 
-// temporal, estatico
-const numCajas = ref(5)
+const numCajas = ref(6)
 
 const container = ref(null)
 let scene, camera, renderer, animationId, gltfLoader, cajaModelo
@@ -43,6 +44,43 @@ const pointer = new THREE.Vector2()
 const cajas = reactive([])
 const cajasMesh = []
 const selectedCaja = ref(null)
+
+// posiciones de tooltip por caja id
+const tooltipPositions = reactive({})
+
+function initTooltipForCaja(id) {
+  tooltipPositions[id] = { x: 0, y: 0, visible: false }
+}
+
+function getTooltipStyle(id) {
+  const p = tooltipPositions[id]
+  if (!p || !p.visible) return { display: 'none' }
+  return {
+    position: 'fixed',
+    left: p.x + 'px',
+    top: p.y + 'px',
+    transform: 'translate(-50%, -160%)',
+    pointerEvents: 'none',
+    zIndex: 40,
+  }
+}
+
+function updateTooltipPositionForId(mesh, id) {
+  if (!mesh || !camera || !renderer || !container.value) return
+  const worldPos = new THREE.Vector3()
+  mesh.getWorldPosition(worldPos)
+
+  const projected = worldPos.clone().project(camera)
+  const rect = renderer.domElement.getBoundingClientRect()
+
+  const x = (projected.x + 1) / 2 * rect.width + rect.left
+  const y = (-projected.y + 1) / 2 * rect.height + rect.top
+
+  // elevar el tooltip unos pixels para que quede más arriba
+  tooltipPositions[id].x = Math.round(x)
+  tooltipPositions[id].y = Math.round(y) - 48
+  tooltipPositions[id].visible = true
+}
 
 // temporal, genera cajas aleatorias
 function generarCajas() {
@@ -248,6 +286,7 @@ function init() {
       const modelo = crearCaja(caja, x)
       cajasMesh.push(modelo)
       scene.add(modelo)
+      initTooltipForCaja(caja.id)
     })
   })
 
@@ -257,6 +296,13 @@ function init() {
 
 function animate() {
   animationId = requestAnimationFrame(animate)
+  // actualizar posiciones de todos los tooltips para que siempre sean visibles
+  if (cajasMesh.length) {
+    cajasMesh.forEach((mesh) => {
+      const id = mesh.userData?.caja?.id
+      if (id != null) updateTooltipPositionForId(mesh, id)
+    })
+  }
   renderer.render(scene, camera)
 }
 
@@ -290,12 +336,17 @@ function onHoverScene(event) {
     return
   }
 
-  const caja = buscarCajaDesdeObjeto(intersects[0].object)
-  if (!caja) {
+  // buscar el grupo que contiene userData.caja
+  let grupo = intersects[0].object
+  while (grupo && !grupo.userData?.caja) grupo = grupo.parent
+  if (!grupo) {
     selectedCaja.value = null
     return
   }
+
+  const caja = grupo.userData.caja
   selectedCaja.value = cajas.find((c) => c.id === caja.id) || null
+  if (selectedCaja.value) updateTooltipPositionForId(grupo, caja.id)
 }
 
 function onLeaveScene() {
@@ -410,5 +461,32 @@ function actualizarCajas() {
   background: #f0f0f0;
   padding: 4px 12px;
   border-radius: 20px;
+}
+
+.tooltip {
+  position: fixed;
+  pointer-events: none;
+}
+
+.tooltip-card {
+  background: #ffffff;
+  border-radius: 10px;
+  padding: 8px 12px;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.16);
+  display: inline-block;
+  pointer-events: none;
+}
+
+.tooltip-header {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.tooltip-content {
+  margin-top: 6px;
+  font-weight: 600;
+  color: #333;
 }
 </style>
