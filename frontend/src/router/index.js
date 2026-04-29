@@ -10,8 +10,7 @@ const router = createRouter({
     {
       path: '/simulacion',
       name: 'simulacion',
-      component: () => import('../components/renderCajas.vue'),
-      // component: () => import('../views/SimulacionView.vue'),
+      component: () => import('../views/SimulacionView.vue'),
     },
   ],
 })

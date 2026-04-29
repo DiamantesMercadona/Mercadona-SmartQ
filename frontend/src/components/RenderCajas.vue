@@ -1,16 +1,8 @@
 <template>
   <div ref="container" class="scene"></div>
-  <div>
-    <button @click="actualizarCajas">TEST</button>
-  </div>
 
   <div>
-    <div
-      v-for="c in cajas"
-      :key="c.id"
-      class="tooltip"
-      :style="getTooltipStyle(c.id)"
-    >
+    <div v-for="c in cajas" :key="c.id" class="tooltip" :style="getTooltipStyle(c.id)">
       <div class="tooltip-card">
         <div class="tooltip-header">
           <strong>Caja {{ c.id }}</strong>
@@ -25,25 +17,46 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onBeforeUnmount, reactive } from 'vue'
+import { ref, onMounted, onBeforeUnmount, reactive, computed, watch } from 'vue'
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 
 const gtlfCajaPath = '/assets/3dmodels/psx_cashier_stand/scene.gltf'
 
+const props = defineProps({
+  cajas: {
+    type: Array,
+    default: () => [],
+  },
+})
+
+const cajas = computed(() => props.cajas ?? [])
+
 const sizeCaja = 1.5
 const separacionCajas = 2.2 + sizeCaja
+const cajasPorGrupo = 3
+const espacioGrupos = 2.5
 
-const numCajas = ref(6)
+const sueloLargo = 40
+const sueloAncho = 20
+
+const mostrarReferenciasEspaciales = true
+
+const camaraLibre = true
+
+// const posicionCamara = new THREE.Vector3(0, 9, 18)
+// const objetivoCamara = new THREE.Vector3(0, 0, 0)
+
+// vista cenital para utilizar la camara como source de opencv
+const posicionCamara = new THREE.Vector3(0, 20, 0)
+const objetivoCamara = new THREE.Vector3(0, 0, 0)
 
 const container = ref(null)
-let scene, camera, renderer, animationId, gltfLoader, cajaModelo
-const raycaster = new THREE.Raycaster()
-const pointer = new THREE.Vector2()
+let scene, camera, renderer, animationId, gltfLoader, cajaModelo, controls
+let referenciasEspaciales = []
 
-const cajas = reactive([])
 const cajasMesh = []
-const selectedCaja = ref(null)
 
 // posiciones de tooltip por caja id
 const tooltipPositions = reactive({})
@@ -73,26 +86,13 @@ function updateTooltipPositionForId(mesh, id) {
   const projected = worldPos.clone().project(camera)
   const rect = renderer.domElement.getBoundingClientRect()
 
-  const x = (projected.x + 1) / 2 * rect.width + rect.left
-  const y = (-projected.y + 1) / 2 * rect.height + rect.top
+  const x = ((projected.x + 1) / 2) * rect.width + rect.left
+  const y = ((-projected.y + 1) / 2) * rect.height + rect.top
 
   // elevar el tooltip unos pixels para que quede más arriba
   tooltipPositions[id].x = Math.round(x)
   tooltipPositions[id].y = Math.round(y) - 48
   tooltipPositions[id].visible = true
-}
-
-// temporal, genera cajas aleatorias
-function generarCajas() {
-  cajas.length = 0
-  for (let i = 0; i < numCajas.value; i++) {
-    const abierta = Math.random() > 0.35
-    cajas.push({
-      id: i + 1,
-      abierta: abierta,
-      cola: abierta ? Math.floor(Math.random() * 6) : 0,
-    })
-  }
 }
 
 function cargarModeloCaja() {
@@ -105,9 +105,108 @@ function cargarModeloCaja() {
   })
 }
 
+function limpiarCajasEscena() {
+  cajasMesh.forEach((mesh) => {
+    if (scene) scene.remove(mesh)
+  })
+  cajasMesh.length = 0
+}
+
+function limpiarReferenciasEspaciales() {
+  referenciasEspaciales.forEach((objeto) => {
+    if (scene) scene.remove(objeto)
+  })
+  referenciasEspaciales = []
+}
+
+function crearEtiquetaEje(texto, color) {
+  const canvas = document.createElement('canvas')
+  canvas.width = 256
+  canvas.height = 128
+  const ctx = canvas.getContext('2d')
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height)
+  ctx.font = 'bold 64px sans-serif'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillStyle = '#111827'
+  ctx.strokeStyle = '#ffffff'
+  ctx.lineWidth = 10
+  ctx.strokeText(texto, canvas.width / 2, canvas.height / 2)
+  ctx.fillStyle = color
+  ctx.fillText(texto, canvas.width / 2, canvas.height / 2)
+
+  const texture = new THREE.CanvasTexture(canvas)
+  texture.needsUpdate = true
+
+  const material = new THREE.SpriteMaterial({ map: texture, transparent: true })
+  const sprite = new THREE.Sprite(material)
+  sprite.scale.set(0.9, 0.45, 1)
+  return sprite
+}
+
+function crearReferenciasEspaciales() {
+  if (!scene || !mostrarReferenciasEspaciales) return
+
+  limpiarReferenciasEspaciales()
+
+  const margen = 1.25
+  const esquina = new THREE.Vector3(-sueloLargo / 2 + margen, 0.05, -sueloAncho / 2 + margen)
+
+  const ejes = new THREE.AxesHelper(2)
+  ejes.position.copy(esquina)
+  scene.add(ejes)
+  referenciasEspaciales.push(ejes)
+
+  const etiquetaX = crearEtiquetaEje('X', '#ef4444')
+  etiquetaX.position.set(esquina.x + 2.25, esquina.y + 0.12, esquina.z)
+  scene.add(etiquetaX)
+  referenciasEspaciales.push(etiquetaX)
+
+  const etiquetaY = crearEtiquetaEje('Y', '#22c55e')
+  etiquetaY.position.set(esquina.x, esquina.y + 2.15, esquina.z)
+  scene.add(etiquetaY)
+  referenciasEspaciales.push(etiquetaY)
+
+  const etiquetaZ = crearEtiquetaEje('Z', '#3b82f6')
+  etiquetaZ.position.set(esquina.x, esquina.y + 0.12, esquina.z + 2.25)
+  scene.add(etiquetaZ)
+  referenciasEspaciales.push(etiquetaZ)
+
+  const centro = new THREE.Mesh(
+    new THREE.SphereGeometry(0.12, 16, 16),
+    new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 0.7 }),
+  )
+  centro.position.set(0, 0.12, 0)
+  scene.add(centro)
+  referenciasEspaciales.push(centro)
+
+  const grid = new THREE.GridHelper(sueloLargo, sueloLargo, 0x9ca3af, 0x4b5563)
+  grid.position.y = 0.01
+  scene.add(grid)
+  referenciasEspaciales.push(grid)
+}
+
+function renderizarCajas() {
+  if (!scene || !cajaModelo) return
+
+  limpiarCajasEscena()
+
+  cajas.value.forEach((caja, i) => {
+    const grupoIndex = Math.floor(i / cajasPorGrupo)
+    const x =
+      (i - (cajas.value.length - 1) / 2) * (separacionCajas + 0.5) + grupoIndex * espacioGrupos
+    const modelo = crearCaja(caja, x)
+    cajasMesh.push(modelo)
+    scene.add(modelo)
+    initTooltipForCaja(caja.id)
+  })
+}
+
 function crearCaja(caja, x) {
   const grupo = new THREE.Group()
   grupo.position.x = x
+  grupo.position.z = -7
   grupo.userData.caja = caja
 
   const modeloClone = cajaModelo.clone()
@@ -124,7 +223,7 @@ function crearCaja(caja, x) {
   return grupo
 }
 
-function crearCliente() {
+function crearClienteModelo() {
   const g = new THREE.Group()
 
   const cuerpo = new THREE.Mesh(
@@ -155,29 +254,34 @@ function crearCliente() {
   return g
 }
 
+function crearClienteImagen() {}
+
+function crearCliente() {
+  return crearClienteModelo()
+}
+
 function actualizarCola(grupo, cantidad) {
   grupo.userData.clientes.forEach((c) => grupo.remove(c))
   grupo.userData.clientes = []
 
   for (let i = 0; i < cantidad; i++) {
     const cliente = crearCliente()
-    cliente.position.set(1, 0, 2 + i * 1.25)
+    cliente.position.set(1, 0, 2.5 + i * 1.25)
     grupo.add(cliente)
     grupo.userData.clientes.push(cliente)
   }
 }
 
 function syncScene() {
-  cajas.forEach((caja, i) => {
+  cajas.value.forEach((caja, i) => {
+    if (!cajasMesh[i]) return
     actualizarCola(cajasMesh[i], caja.cola)
     cajasMesh[i].userData.dependiente.visible = caja.abierta
   })
 }
 
 function init() {
-  const sueloLargo = 28
-  const sueloAncho = 18
-  generarCajas()
+  console.log(cajas.value)
 
   scene = new THREE.Scene()
 
@@ -206,15 +310,20 @@ function init() {
     0.1,
     100,
   )
-  camera.position.set(0, 9, 18)
-  camera.lookAt(0, 0, 0)
+  camera.position.copy(posicionCamara)
+  camera.lookAt(objetivoCamara)
 
-  // render y hovers
+  // render
   renderer = new THREE.WebGLRenderer({ antialias: true })
   renderer.setSize(container.value.clientWidth, container.value.clientHeight)
   container.value.appendChild(renderer.domElement)
-  renderer.domElement.addEventListener('pointermove', onHoverScene)
-  renderer.domElement.addEventListener('pointerleave', onLeaveScene)
+
+  if (camaraLibre) {
+    controls = new OrbitControls(camera, renderer.domElement)
+    controls.enableDamping = true
+    controls.target.copy(objetivoCamara)
+    controls.update()
+  }
 
   // luces
   const ambient = new THREE.AmbientLight(0xffffff, 1.3)
@@ -278,16 +387,12 @@ function init() {
   suelo.receiveShadow = true
   scene.add(suelo)
 
+  crearReferenciasEspaciales()
+
   // cargar modelo caja
   gltfLoader = new GLTFLoader()
   cargarModeloCaja().then(() => {
-    cajas.forEach((caja, i) => {
-      const x = (i - (numCajas.value - 1) / 2) * (separacionCajas + 0.5)
-      const modelo = crearCaja(caja, x)
-      cajasMesh.push(modelo)
-      scene.add(modelo)
-      initTooltipForCaja(caja.id)
-    })
+    renderizarCajas()
   })
 
   animate()
@@ -296,6 +401,7 @@ function init() {
 
 function animate() {
   animationId = requestAnimationFrame(animate)
+  if (controls) controls.update()
   // actualizar posiciones de todos los tooltips para que siempre sean visibles
   if (cajasMesh.length) {
     cajasMesh.forEach((mesh) => {
@@ -313,61 +419,24 @@ function onResize() {
   renderer.setSize(container.value.clientWidth, container.value.clientHeight)
 }
 
-function buscarCajaDesdeObjeto(obj) {
-  let actual = obj
-  while (actual) {
-    if (actual.userData?.caja) return actual.userData.caja
-    actual = actual.parent
-  }
-  return null
-}
-
-function onHoverScene(event) {
-  if (!renderer || !camera || cajasMesh.length === 0) return
-
-  const rect = renderer.domElement.getBoundingClientRect()
-  pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1
-  pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1
-
-  raycaster.setFromCamera(pointer, camera)
-  const intersects = raycaster.intersectObjects(cajasMesh, true)
-  if (!intersects.length) {
-    selectedCaja.value = null
-    return
-  }
-
-  // buscar el grupo que contiene userData.caja
-  let grupo = intersects[0].object
-  while (grupo && !grupo.userData?.caja) grupo = grupo.parent
-  if (!grupo) {
-    selectedCaja.value = null
-    return
-  }
-
-  const caja = grupo.userData.caja
-  selectedCaja.value = cajas.find((c) => c.id === caja.id) || null
-  if (selectedCaja.value) updateTooltipPositionForId(grupo, caja.id)
-}
-
-function onLeaveScene() {
-  selectedCaja.value = null
-}
+watch(
+  () => props.cajas,
+  () => {
+    renderizarCajas()
+    syncScene()
+  },
+  { deep: true, immediate: true },
+)
 
 onMounted(init)
 
 onBeforeUnmount(() => {
   cancelAnimationFrame(animationId)
   window.removeEventListener('resize', onResize)
-  renderer?.domElement?.removeEventListener('pointermove', onHoverScene)
-  renderer?.domElement?.removeEventListener('pointerleave', onLeaveScene)
+  controls?.dispose()
+  limpiarReferenciasEspaciales()
   renderer?.dispose()
 })
-
-// para probar cambios en tiempo real, luego esto vendra del backend
-function actualizarCajas() {
-  generarCajas()
-  syncScene()
-}
 </script>
 
 <style scoped>
@@ -472,7 +541,7 @@ function actualizarCajas() {
   background: #ffffff;
   border-radius: 10px;
   padding: 8px 12px;
-  box-shadow: 0 8px 20px rgba(0,0,0,0.16);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.16);
   display: inline-block;
   pointer-events: none;
 }
