@@ -114,3 +114,6 @@ class MSQEngine:
         self.cap.release()
         cv2.destroyAllWindows()
         self.conn.close()
+if __name__ == "__main__":
+    engine = MSQEngine()
+    engine.process()
