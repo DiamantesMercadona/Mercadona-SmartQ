@@ -2,5 +2,4 @@ metadatos cliente: productos, hora llegada, etc. Con tooltip o modal
 
 centrar cajas respecto al centro
 añadir array con los clientes, añadir funciones parwa añadir y eliminar clientes
-hacer que una camara sea source para el back
 poner png en lugar de los muñecos

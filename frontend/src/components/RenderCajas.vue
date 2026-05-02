@@ -15,6 +15,9 @@
       <input type="checkbox" v-model="mostrarReferenciasEspaciales" /> Referencias espaciales
     </label>
     <label class="toggle"> <input type="checkbox" v-model="mostrarLabels" /> Etiquetas </label>
+    <label class="toggle">
+      <input type="checkbox" v-model="saveFrames" /> Enviar frames al servidor
+    </label>
   </div>
 
   <!-- Tooltips cajas -->
@@ -39,24 +42,25 @@
         <div class="modal-header">
           <h2>Modo cámara libre</h2>
         </div>
-        <div >
+        <div>
           <div>
             <div class="info-value">
-               Posición: ({{ camera.position.x.toFixed(1) }}, {{ camera.position.y.toFixed(1) }}, {{ camera.position.z.toFixed(1) }})
+              Posición: ({{ camera.position.x.toFixed(1) }}, {{ camera.position.y.toFixed(1) }},
+              {{ camera.position.z.toFixed(1) }})
             </div>
           </div>
         </div>
       </div>
     </div>
   </div>
-
 </template>
 
 <script setup>
-import { ref, onMounted, onBeforeUnmount, reactive, computed, watch } from 'vue'
+import { ref, onMounted, onBeforeUnmount, reactive, computed, watch, render } from 'vue'
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
+import axios from 'axios'
 
 const gtlfCajaPath = '/assets/3dmodels/psx_cashier_stand/scene.gltf'
 
@@ -66,6 +70,12 @@ const props = defineProps({
     default: () => [],
   },
 })
+
+const URL_FRAME_TEST = 'http://localhost:5000/frame'
+let lastFrameBlob = null
+let lastFrameTimestamp = 0
+const FRAME_CAPTURE_INTERVAL_SEC = 5
+const saveFrames = ref(false)
 
 const cajas = computed(() => props.cajas ?? [])
 
@@ -83,8 +93,8 @@ const mostrarLabels = ref(true)
 const cameraMode = ref('frontal') // libre, frontal, cenital. El por defecto no puese ser libre da error
 
 const posicionesCamara = {
-  "frontal": new THREE.Vector3(0, 3, 10),
-  "cenital": new THREE.Vector3(0, 20, 0.01),
+  frontal: new THREE.Vector3(-0.2, 9.2, 9.2),
+  cenital: new THREE.Vector3(0, 20, 0.01),
 }
 
 const container = ref(null)
@@ -347,7 +357,8 @@ function init() {
   camera.position.copy(posicionesCamara[cameraMode.value])
 
   // render
-  renderer = new THREE.WebGLRenderer({ antialias: true })
+  // habilitar preserveDrawingBuffer para poder capturar el canvas luego
+  renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true })
   renderer.setSize(container.value.clientWidth, container.value.clientHeight)
   container.value.appendChild(renderer.domElement)
 
@@ -454,7 +465,37 @@ function animate() {
     controls.target.x = Math.max(-halfL, Math.min(halfL, controls.target.x))
     controls.target.z = Math.max(-halfW, Math.min(halfW, controls.target.z))
   }
+
   renderer.render(scene, camera)
+
+  if (saveFrames.value) {
+    const now = Date.now()
+    if (now - lastFrameTimestamp > FRAME_CAPTURE_INTERVAL_SEC * 1000) {
+      renderer.domElement.toBlob(
+        (blob) => {
+          lastFrameBlob = blob
+          lastFrameTimestamp = now
+          sendFrameToServer()
+        },
+        'image/jpeg',
+        0.95,
+      )
+    }
+  }
+}
+
+async function sendFrameToServer() {
+  if (!lastFrameBlob) return
+  try {
+    await axios.post(URL_FRAME_TEST, lastFrameBlob, {
+      headers: {
+        'Content-Type': 'image/jpeg',
+      },
+      timeout: 5000,
+    })
+  } catch (error) {
+    console.error('Error enviando frame al servidor:', error)
+  }
 }
 
 function onResize() {
