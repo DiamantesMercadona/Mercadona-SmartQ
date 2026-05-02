@@ -1,9 +1,24 @@
 <template>
   <div ref="container" class="scene"></div>
 
+  <div class="controls-panel">
+    <label>
+      Cámara:
+      <select v-model="cameraMode">
+        <option value="libre">Libre</option>
+        <option value="frontal">Frontal</option>
+        <option value="cenital">Cenital</option>
+      </select>
+    </label>
+    <label class="toggle">
+      <input type="checkbox" v-model="mostrarReferenciasEspaciales" /> Referencias espaciales
+    </label>
+    <label class="toggle"> <input type="checkbox" v-model="mostrarLabels" /> Etiquetas </label>
+  </div>
+
   <div>
     <div v-for="c in cajas" :key="c.id" class="tooltip" :style="getTooltipStyle(c.id)">
-      <div class="tooltip-card">
+      <div class="tooltip-card" v-if="mostrarLabels">
         <div class="tooltip-header">
           <strong>Caja {{ c.id }}</strong>
           <div :class="['status-badge', c.abierta ? 'open' : 'closed']">
@@ -41,16 +56,21 @@ const espacioGrupos = 2.5
 const sueloLargo = 40
 const sueloAncho = 20
 
-const mostrarReferenciasEspaciales = true
+const mostrarReferenciasEspaciales = ref(false)
+const mostrarLabels = ref(true)
 
-const camaraLibre = true
-
-// const posicionCamara = new THREE.Vector3(0, 9, 18)
-// const objetivoCamara = new THREE.Vector3(0, 0, 0)
-
-// vista cenital para utilizar la camara como source de opencv
-const posicionCamara = new THREE.Vector3(0, 20, 0)
-const objetivoCamara = new THREE.Vector3(0, 0, 0)
+const cameraMode = ref('libre') // libre, frontal, cenital
+const defaultCameraMode = 'frontal'
+const posicionesCamara = {
+  frontal: {
+    position: new THREE.Vector3(0, 3, 10),
+    objetivo: new THREE.Vector3(0, 0, 0),
+  },
+  cenital: {
+    position: new THREE.Vector3(0, 20, 0.01),
+    objetivo: new THREE.Vector3(0, 0, 0),
+  },
+}
 
 const container = ref(null)
 let scene, camera, renderer, animationId, gltfLoader, cajaModelo, controls
@@ -89,9 +109,8 @@ function updateTooltipPositionForId(mesh, id) {
   const x = ((projected.x + 1) / 2) * rect.width + rect.left
   const y = ((-projected.y + 1) / 2) * rect.height + rect.top
 
-  // elevar el tooltip unos pixels para que quede más arriba
   tooltipPositions[id].x = Math.round(x)
-  tooltipPositions[id].y = Math.round(y) - 48
+  tooltipPositions[id].y = Math.round(y) - 48 // ajustar altura del tooltip
   tooltipPositions[id].visible = true
 }
 
@@ -146,7 +165,7 @@ function crearEtiquetaEje(texto, color) {
 }
 
 function crearReferenciasEspaciales() {
-  if (!scene || !mostrarReferenciasEspaciales) return
+  if (!scene || !mostrarReferenciasEspaciales.value) return
 
   limpiarReferenciasEspaciales()
 
@@ -254,7 +273,7 @@ function crearClienteModelo() {
   return g
 }
 
-function crearClienteImagen() {}
+// function crearClienteImagen() {}
 
 function crearCliente() {
   return crearClienteModelo()
@@ -310,6 +329,8 @@ function init() {
     0.1,
     100,
   )
+  const posicionCamara = posicionesCamara[defaultCameraMode]['position']
+  const objetivoCamara = posicionesCamara[defaultCameraMode]['objetivo']
   camera.position.copy(posicionCamara)
   camera.lookAt(objetivoCamara)
 
@@ -318,12 +339,12 @@ function init() {
   renderer.setSize(container.value.clientWidth, container.value.clientHeight)
   container.value.appendChild(renderer.domElement)
 
-  if (camaraLibre) {
-    controls = new OrbitControls(camera, renderer.domElement)
-    controls.enableDamping = true
-    controls.target.copy(objetivoCamara)
-    controls.update()
-  }
+  //conteoles free cam
+  controls = new OrbitControls(camera, renderer.domElement)
+  controls.enableDamping = true
+  controls.target.copy(objetivoCamara)
+  controls.enabled = cameraMode.value === 'libre'
+  controls.update()
 
   // luces
   const ambient = new THREE.AmbientLight(0xffffff, 1.3)
@@ -387,7 +408,8 @@ function init() {
   suelo.receiveShadow = true
   scene.add(suelo)
 
-  crearReferenciasEspaciales()
+  // create references according to toggle
+  if (mostrarReferenciasEspaciales.value) crearReferenciasEspaciales()
 
   // cargar modelo caja
   gltfLoader = new GLTFLoader()
@@ -409,6 +431,18 @@ function animate() {
       if (id != null) updateTooltipPositionForId(mesh, id)
     })
   }
+
+  // restricciones camara libre
+  if (controls && controls.enabled && camera) {
+    const halfL = sueloLargo / 2
+    const halfW = sueloAncho / 2
+    const minY = 0.5
+    camera.position.x = Math.max(-halfL, Math.min(halfL, camera.position.x))
+    camera.position.z = Math.max(-halfW, Math.min(halfW, camera.position.z))
+    camera.position.y = Math.max(minY, camera.position.y)
+    controls.target.x = Math.max(-halfL, Math.min(halfL, controls.target.x))
+    controls.target.z = Math.max(-halfW, Math.min(halfW, controls.target.z))
+  }
   renderer.render(scene, camera)
 }
 
@@ -419,6 +453,30 @@ function onResize() {
   renderer.setSize(container.value.clientWidth, container.value.clientHeight)
 }
 
+// watch toggle para las referencias espaciales
+watch(mostrarReferenciasEspaciales, (val) => {
+  if (!scene) return
+  if (val) crearReferenciasEspaciales()
+  else limpiarReferenciasEspaciales()
+})
+
+// watch camera mode
+watch(cameraMode, (mode) => {
+  if (!camera) return
+  if (!controls) return
+  if (mode === 'libre') {
+    controls.enabled = true
+    return
+  }
+  const posicionCamara = posicionesCamara[mode]['position']
+  const objetivoCamara = posicionesCamara[mode]['objetivo']
+  controls.enabled = false
+  camera.position.copy(posicionCamara)
+  camera.lookAt(objetivoCamara)
+  controls.update()
+})
+
+// watch para cambios en los props de cajas
 watch(
   () => props.cajas,
   () => {
@@ -444,6 +502,30 @@ onBeforeUnmount(() => {
   width: 100%;
   height: 100vh;
   overflow: hidden;
+}
+
+.controls-panel {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  background: rgba(255, 255, 255, 0.9);
+  padding: 8px 10px;
+  border-radius: 8px;
+  z-index: 50;
+  pointer-events: auto;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  font-size: 14px;
+}
+
+.controls-panel select {
+  padding: 4px 6px;
+}
+.controls-panel .toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .modal-top {

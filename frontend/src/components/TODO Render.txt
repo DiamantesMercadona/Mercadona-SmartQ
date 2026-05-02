@@ -1,8 +1,6 @@
 metadatos cliente: productos, hora llegada, etc. Con tooltip o modal
 
-restricciones camara free, no baje del suelo
 centrar cajas respecto al centro
 añadir array con los clientes, añadir funciones parwa añadir y eliminar clientes
-añadir listado camaras, free, cenital, etc
 hacer que una camara sea source para el back
 poner png en lugar de los muñecos
