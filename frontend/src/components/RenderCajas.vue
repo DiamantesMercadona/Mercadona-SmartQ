@@ -1,6 +1,7 @@
 <template>
   <div ref="container" class="scene"></div>
 
+  <!-- Constroles camara y toggles -->
   <div class="controls-panel">
     <label>
       Cámara:
@@ -16,6 +17,7 @@
     <label class="toggle"> <input type="checkbox" v-model="mostrarLabels" /> Etiquetas </label>
   </div>
 
+  <!-- Tooltips cajas -->
   <div>
     <div v-for="c in cajas" :key="c.id" class="tooltip" :style="getTooltipStyle(c.id)">
       <div class="tooltip-card" v-if="mostrarLabels">
@@ -29,6 +31,25 @@
       </div>
     </div>
   </div>
+
+  <div>
+    <!-- Mostrar cordenadas free cam -->
+    <div v-if="mostrarReferenciasEspaciales && cameraMode === 'libre'" class="modal-top">
+      <div class="modal">
+        <div class="modal-header">
+          <h2>Modo cámara libre</h2>
+        </div>
+        <div >
+          <div>
+            <div class="info-value">
+               Posición: ({{ camera.position.x.toFixed(1) }}, {{ camera.position.y.toFixed(1) }}, {{ camera.position.z.toFixed(1) }})
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
 </template>
 
 <script setup>
@@ -59,21 +80,15 @@ const sueloAncho = 20
 const mostrarReferenciasEspaciales = ref(false)
 const mostrarLabels = ref(true)
 
-const cameraMode = ref('libre') // libre, frontal, cenital
-const defaultCameraMode = 'frontal'
+const cameraMode = ref('frontal') // libre, frontal, cenital. El por defecto no puese ser libre da error
+
 const posicionesCamara = {
-  frontal: {
-    position: new THREE.Vector3(0, 3, 10),
-    objetivo: new THREE.Vector3(0, 0, 0),
-  },
-  cenital: {
-    position: new THREE.Vector3(0, 20, 0.01),
-    objetivo: new THREE.Vector3(0, 0, 0),
-  },
+  "frontal": new THREE.Vector3(0, 3, 10),
+  "cenital": new THREE.Vector3(0, 20, 0.01),
 }
 
 const container = ref(null)
-let scene, camera, renderer, animationId, gltfLoader, cajaModelo, controls
+let scene, camera, renderer, animationId, gltfLoader, cajaModelo, controls, canvas
 let referenciasEspaciales = []
 
 const cajasMesh = []
@@ -139,7 +154,7 @@ function limpiarReferenciasEspaciales() {
 }
 
 function crearEtiquetaEje(texto, color) {
-  const canvas = document.createElement('canvas')
+  canvas = document.createElement('canvas')
   canvas.width = 256
   canvas.height = 128
   const ctx = canvas.getContext('2d')
@@ -329,20 +344,16 @@ function init() {
     0.1,
     100,
   )
-  const posicionCamara = posicionesCamara[defaultCameraMode]['position']
-  const objetivoCamara = posicionesCamara[defaultCameraMode]['objetivo']
-  camera.position.copy(posicionCamara)
-  camera.lookAt(objetivoCamara)
+  camera.position.copy(posicionesCamara[cameraMode.value])
 
   // render
   renderer = new THREE.WebGLRenderer({ antialias: true })
   renderer.setSize(container.value.clientWidth, container.value.clientHeight)
   container.value.appendChild(renderer.domElement)
 
-  //conteoles free cam
+  //controles free cam
   controls = new OrbitControls(camera, renderer.domElement)
   controls.enableDamping = true
-  controls.target.copy(objetivoCamara)
   controls.enabled = cameraMode.value === 'libre'
   controls.update()
 
@@ -468,11 +479,8 @@ watch(cameraMode, (mode) => {
     controls.enabled = true
     return
   }
-  const posicionCamara = posicionesCamara[mode]['position']
-  const objetivoCamara = posicionesCamara[mode]['objetivo']
   controls.enabled = false
-  camera.position.copy(posicionCamara)
-  camera.lookAt(objetivoCamara)
+  camera.position.copy(posicionesCamara[mode])
   controls.update()
 })
 
