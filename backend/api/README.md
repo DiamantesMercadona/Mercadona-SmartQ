@@ -51,6 +51,30 @@ Cuerpo de la solicitud:
 }
 ```
 
+### GET /api/v1/redis/health
+Comprueba si la API puede conectarse a Redis y muestra el canal Pub/Sub usado.
+
+### POST /api/v1/video/events
+Recibe una medicion del simulador/camara y la publica en Redis.
+
+Cuerpo de la solicitud:
+```json
+{
+  "camera_id": "simulador-3d",
+  "zone": "Caja_1",
+  "frame_id": 1,
+  "people_count": 5,
+  "metadata": {
+    "fps": 30
+  }
+}
+```
+
+El evento se publica en el canal configurado como `msq:video:events`.
+
+### WS /api/v1/ws/video
+WebSocket para recibir eventos continuos del simulador y reenviarlos a Redis.
+
 ## Base de Datos
 
 La base de datos `queues.db` se crea automáticamente con datos de ejemplo al iniciar la aplicación.

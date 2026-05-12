@@ -5,6 +5,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from fastapi import FastAPI
 from api.get_endpoints import router as get_router
 from api.post_endpoints import router as post_router
+from api.video_endpoints import router as video_router
 from api.database import init_db
 
 # Inicializar la base de datos
@@ -14,6 +15,7 @@ app = FastAPI(title="Mercadona Queue API", description="API para acceder al esta
 
 app.include_router(get_router, prefix="/api/v1", tags=["GET Endpoints"])
 app.include_router(post_router, prefix="/api/v1", tags=["POST Endpoints"])
+app.include_router(video_router, prefix="/api/v1", tags=["Video Redis Ingest"])
 
 if __name__ == "__main__":
     import uvicorn

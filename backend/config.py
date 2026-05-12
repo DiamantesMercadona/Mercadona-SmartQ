@@ -10,6 +10,8 @@ CONFIG = {
     "DATABASE": {
         "redis_host": "localhost",      # Host de Redis
         "redis_port": 6379,             # Puerto de Redis
+        "redis_db": 0,                  # Base logica de Redis
+        "redis_video_channel": "msq:video:events",  # Canal Pub/Sub para eventos del simulador
         "db_path": "msq.db",            # Archivo SQLite para almacenamiento local
         "cadencia_grabacion_seg": 5,    # Intervalo de guardado en SQLite
     },
