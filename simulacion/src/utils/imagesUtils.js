@@ -1,7 +1,6 @@
-const personsImgPath = '/assets/imagenes/faces/'
+const facesImgPath = '/assets/imagenes/faces/'
+const personsImgPath = '/assets/imagenes/personas/'
 const carritoImgPath = '/assets/imagenes/carritos/'
-
-const imagenCarrito = carritoImgPath + 'carrito.png'
 
 const facesArray = [
   '60b26b0ee6c7580004508998.png',
@@ -16,13 +15,34 @@ const facesArray = [
   '60b270ffe6c75800045089a5.png',
 ]
 
+const facesArray2 = [
+  'alvaro.png',
+  'alvaro2.png',
+  // "jose.png",
+]
+
+const carrosArray = ['c1.png', 'c2.png', 'c3.png', 'c4.png', 'c5.png', 'c6.png']
+
+const personasArray = ['p1.png', 'p2.png', 'p3.png', 'p4.png']
+
 function getRandomFace() {
   const randomIndex = Math.floor(Math.random() * facesArray.length)
-  return personsImgPath + facesArray[randomIndex]
+  return facesImgPath + facesArray[randomIndex]
 }
 
-function getAlvaroFace() {
-  return personsImgPath + 'alvaro.png'
+function getFacesRandomDependiente() {
+  const randomIndex = Math.floor(Math.random() * facesArray2.length)
+  return facesImgPath + facesArray2[randomIndex]
 }
 
-export { getRandomFace, getAlvaroFace, imagenCarrito }
+function getRandomCarrito() {
+  const randomIndex = Math.floor(Math.random() * carrosArray.length)
+  return carritoImgPath + carrosArray[randomIndex]
+}
+
+function getRandomPersona() {
+  const randomIndex = Math.floor(Math.random() * personasArray.length)
+  return personsImgPath + personasArray[randomIndex]
+}
+
+export { getRandomFace, getFacesRandomDependiente, getRandomCarrito, getRandomPersona }

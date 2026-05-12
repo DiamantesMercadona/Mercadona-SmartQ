@@ -9,7 +9,7 @@ import Cliente from '@/models/Cliente.js'
 import RenderCajas from '../components/RenderCajas.vue'
 
 const simulacion = ref(null)
-const tiempoUpdateTestSec = 2
+const tiempoUpdateTestSec = 5
 simulacion.value = new Simulacion(6)
 
 function updateSimulacion() {

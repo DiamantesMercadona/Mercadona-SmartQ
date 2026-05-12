@@ -72,7 +72,7 @@ import './RenderCajas.css'
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
-import { getRandomFace, getAlvaroFace, imagenCarrito } from '@/utils/imagesUtils'
+import { getFacesRandomDependiente, getRandomCarrito, getRandomPersona } from '@/utils/imagesUtils'
 import FrameStreamer from '@/utils/frameStreamer.js'
 import { createVideoRecorder } from '@/utils/videoRecorder.js'
 
@@ -100,14 +100,17 @@ const sueloLargo = 40
 const sueloAncho = 20
 
 const faceScale = 0.75
-const carritoScale = 2.7
+
+const carritoScale = 2.3
+const carritoPosition = new THREE.Vector3(1.5, -0.5, 0)
 
 const mostrarReferenciasEspaciales = ref(false)
 const mostrarLabels = ref(true)
 
-const cameraMode = ref('frontal') // libre, frontal, cenital. El por defecto no puese ser libre da error
+const cameraMode = ref('libre') // libre, frontal, cenital
 
 const posicionesCamara = {
+  libre: new THREE.Vector3(-0.2, 9.2, 9.2),
   frontal: new THREE.Vector3(-0.2, 9.2, 9.2),
   cenital: new THREE.Vector3(0, 20, 0.01),
 }
@@ -287,8 +290,8 @@ function crearCaja(caja, x) {
   const modeloClone = cajaModelo.clone()
   grupo.add(modeloClone)
 
-  const dependienteData = { color: 0x3b82f6, imagen: getAlvaroFace() }
-  const dependiente = crearCliente(dependienteData)
+  const dependienteData = { color: 0x3b82f6, imagen: getFacesRandomDependiente() }
+  const dependiente = crearDependiente(dependienteData)
   dependiente.position.set(1, 0, 0)
   grupo.add(dependiente)
   if (!caja.abierta) dependiente.visible = false
@@ -303,21 +306,21 @@ function crearCarrito() {
   const g = new THREE.Group()
 
   const textureLoader = new THREE.TextureLoader()
-  const carritoTexture = textureLoader.load(imagenCarrito)
+  const carritoTexture = textureLoader.load(getRandomCarrito())
 
   const carrito = new THREE.Sprite(
     new THREE.SpriteMaterial({ map: carritoTexture, transparent: true }),
   )
-  // usar la escala global para que el carrito sea del tamaño de la persona
   carrito.scale.set(carritoScale, carritoScale, 1)
   g.add(carrito)
 
   return g
 }
 
-function crearCliente(clienteData) {
+function crearDependiente(clienteData) {
   const g = new THREE.Group()
 
+  // Modelo 3D original para el dependiente
   const cuerpo = new THREE.Mesh(
     new THREE.CylinderGeometry(0.28, 0.32, 1.0, 20),
     new THREE.MeshStandardMaterial({ color: clienteData.color }),
@@ -348,8 +351,28 @@ function crearCliente(clienteData) {
   // Añadir carrito solo si el cliente lo utiliza
   if (clienteData.usaCarrito) {
     const carrito = crearCarrito()
-    // posicionar a la altura aproximada de la persona
-    carrito.position.set(0.5, 1, 0.15)
+    carrito.position.copy(carritoPosition)
+    g.add(carrito)
+  }
+
+  return g
+}
+
+function crearCliente(clienteData) {
+  const g = new THREE.Group()
+
+  // Usar sprite de imagen de persona
+  const textureLoader = new THREE.TextureLoader()
+  const personaTexture = textureLoader.load(getRandomPersona())
+  const personaMaterial = new THREE.SpriteMaterial({ map: personaTexture, transparent: true })
+  const persona = new THREE.Sprite(personaMaterial)
+  persona.scale.set(2.5, 3.5, 1)
+  g.add(persona)
+
+  // Añadir carrito solo si el cliente lo utiliza
+  if (clienteData.usaCarrito) {
+    const carrito = crearCarrito()
+    carrito.position.copy(carritoPosition)
     g.add(carrito)
   }
 
@@ -362,9 +385,8 @@ function actualizarCola(grupo, cola) {
   if (!cola || cola.length < 1) return
   for (let i = 0; i < cola.length; i++) {
     const cliente = crearCliente(cola[i])
-    const offsetX = Math.random() * 0.8 - 0.2
-    cliente.position.set(1 + offsetX, 0, 2.5 + i * 1.25)
-    // cliente.position.set(1, 0, 2.5 + i * 1.25)
+    const offsetX = Math.random() * 1.3
+    cliente.position.set(1 + offsetX, 1.5, 2.5 + i * 1.25)
     grupo.add(cliente)
     grupo.userData.clientes.push(cliente)
   }
@@ -418,10 +440,7 @@ function init() {
   controls = new OrbitControls(camera, renderer.domElement)
   controls.enableDamping = true
   controls.enabled = cameraMode.value === 'libre'
-  // permitir zoom con la rueda y panning; ajustar distancias para permitir alejarse
   controls.enablePan = true
-  controls.minDistance = 1
-  controls.maxDistance = 80
   controls.update()
 
   // key listeners para movimiento WASD
@@ -529,18 +548,8 @@ function animate() {
       delta.copy(forward).multiplyScalar(moveZ * cameraWASDSpeed)
       delta.addScaledVector(right, moveX * cameraWASDSpeed)
 
-      // Evitar salir del área cuando se mueve con WASD: calcular posición propuesta y clamarla
-      const halfL = sueloLargo / 2
-      const halfW = sueloAncho / 2
-      const minY = 0.5
-      const proposedPos = camera.position.clone().add(delta)
-      proposedPos.x = Math.max(-halfL, Math.min(halfL, proposedPos.x))
-      proposedPos.z = Math.max(-halfW, Math.min(halfW, proposedPos.z))
-      proposedPos.y = Math.max(minY, proposedPos.y)
-
-      const appliedDelta = proposedPos.clone().sub(camera.position)
-      camera.position.add(appliedDelta)
-      controls.target.add(appliedDelta)
+      camera.position.add(delta)
+      controls.target.add(delta)
     }
   }
   // actualizar posiciones de todos los tooltips para que siempre sean visibles
@@ -549,22 +558,6 @@ function animate() {
       const id = mesh.userData?.caja?.id
       if (id != null) updateTooltipPositionForId(mesh, id)
     })
-  }
-
-  // restricciones camara libre
-  if (controls && controls.enabled && camera) {
-    const halfL = sueloLargo / 2
-    const halfW = sueloAncho / 2
-    // Relajar límites para permitir alejarse con la rueda del ratón
-    const relaxFactor = 2.5
-    const maxX = halfL * relaxFactor
-    const maxZ = halfW * relaxFactor
-    const minY = 0.3
-    camera.position.x = Math.max(-maxX, Math.min(maxX, camera.position.x))
-    camera.position.z = Math.max(-maxZ, Math.min(maxZ, camera.position.z))
-    camera.position.y = Math.max(minY, camera.position.y)
-    controls.target.x = Math.max(-maxX, Math.min(maxX, controls.target.x))
-    controls.target.z = Math.max(-maxZ, Math.min(maxZ, controls.target.z))
   }
 
   renderer.render(scene, camera)

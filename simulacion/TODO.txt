@@ -1,2 +1,5 @@
-- El modal de la camara no sirve, las cordenadas no se pueden utilizar luego en el codigo.
-- Hacer que se pueda guardar un video en formato mp4 del render
+- El modal de la camara no sirve, las cordenadas no se pueden utilizar luego en el codigo. (Dejar solo camara libre ???)
+- Modificar las camaras fijas.
+- Modificar posicion de las cajas. ???
+
+- Añadir imagen de carrito a la classe cliente para que no se cambie cada vez que se renderiza el cliente.
