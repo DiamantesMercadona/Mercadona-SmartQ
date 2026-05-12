@@ -27,5 +27,9 @@ async def publish_json(channel: str, payload: dict[str, Any]) -> int:
     return await get_redis_client().publish(channel, message)
 
 
+async def publish_bytes(channel: str, payload: bytes) -> int:
+    return await get_redis_client().publish(channel, payload)
+
+
 async def ping_redis() -> bool:
     return bool(await get_redis_client().ping())

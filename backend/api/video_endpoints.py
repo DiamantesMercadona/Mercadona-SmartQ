@@ -4,7 +4,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 
-from .redis_client import get_video_channel, ping_redis, publish_json
+from .redis_client import get_video_channel, ping_redis, publish_bytes, publish_json
 
 router = APIRouter()
 
@@ -60,16 +60,12 @@ async def video_stream(websocket: WebSocket):
 
     try:
         while True:
-            raw_event = await websocket.receive_json()
-            event = VideoEvent.model_validate(raw_event)
-            subscribers = await publish_json(channel, event.model_dump(mode="json"))
-            await websocket.send_json(
-                {
-                    "message": "Evento publicado en Redis",
-                    "channel": channel,
-                    "subscribers": subscribers,
-                    "frame_id": event.frame_id,
-                }
+            payload = await websocket.receive_bytes()
+            subscribers = await publish_bytes(channel, payload)
+            await websocket.send_bytes(
+                f"Evento publicado en Redis; channel={channel}; subscribers={subscribers}".encode(
+                    "utf-8"
+                )
             )
     except WebSocketDisconnect:
         return
