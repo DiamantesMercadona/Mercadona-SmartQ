@@ -14,13 +14,12 @@
     <label class="toggle">
       <input type="checkbox" v-model="mostrarReferenciasEspaciales" /> Referencias espaciales
     </label>
-    <label class="toggle"> <input type="checkbox" v-model="mostrarLabels" /> Etiquetas </label>
+    <label class="toggle">
+      <input type="checkbox" v-model="mostrarLabels" /> Etiquetas </label>
     <label class="toggle">
       <input type="checkbox" v-model="saveFrames" /> Enviar frames al servidor
     </label>
-    <label class="toggle">
-      <input type="checkbox" v-model="useImagesClientes" /> Usar imágenes para clientes
-    </label>
+    <button @click="downloadFrame" class="btn-download">Descargar frame</button>
   </div>
 
   <!-- Tooltips cajas -->
@@ -33,7 +32,7 @@
             {{ c.abierta ? 'Abierta' : 'Cerrada' }}
           </div>
         </div>
-        <div class="tooltip-content">👥 {{ c.cola }} en cola</div>
+        <div class="tooltip-content">👥 {{ c.cola.length }} en cola</div>
       </div>
     </div>
   </div>
@@ -64,25 +63,20 @@ import * as THREE from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import axios from 'axios'
+import { getRandomFace, getAlvaroFace } from '@/utils/getFace'
 
 const gtlfCajaPath = '/assets/3dmodels/psx_cashier_stand/scene.gltf'
-const personsImgPath = '/assets/persons/'
-const peronsImgs = ["p1.webp", "p2.webp", "p3.webp"]
 
 const props = defineProps({
-  cajas: {
-    type: Array,
-    default: () => [],
+  simulacion: {
+    type: Object,
+    default: null,
   },
 })
 
-const URL_FRAME_TEST = 'http://localhost:5000/frame'
-let lastFrameBlob = null
-let lastFrameTimestamp = 0
-const FRAME_CAPTURE_INTERVAL_SEC = 5
 const saveFrames = ref(false)
 
-const cajas = computed(() => props.cajas ?? [])
+const cajas = computed(() => props.simulacion?.cajas ?? [])
 
 const sizeCaja = 1.5
 const separacionCajas = 2.2 + sizeCaja
@@ -92,15 +86,10 @@ const espacioGrupos = 2.5
 const sueloLargo = 40
 const sueloAncho = 20
 
-const clienteXOffset = 1.5 
-const clienteImagenScaleX = 1.8
-const clienteImagenScaleY = 2.7 
-const clienteImagenScale = new THREE.Vector3(sizeCaja * clienteImagenScaleX, sizeCaja * clienteImagenScaleY, 1)
-
+const faceScale = 0.75
 
 const mostrarReferenciasEspaciales = ref(false)
 const mostrarLabels = ref(true)
-const useImagesClientes = ref(false)
 
 const cameraMode = ref('frontal') // libre, frontal, cenital. El por defecto no puese ser libre da error
 
@@ -268,7 +257,8 @@ function crearCaja(caja, x) {
   const modeloClone = cajaModelo.clone()
   grupo.add(modeloClone)
 
-  const dependiente = crearClienteModelo()
+  const dependienteData = { color: 0x3b82f6, imagen: getAlvaroFace() }
+  const dependiente = crearCliente(dependienteData)
   dependiente.position.set(1, 0, 0)
   grupo.add(dependiente)
   if (!caja.abierta) dependiente.visible = false
@@ -279,20 +269,22 @@ function crearCaja(caja, x) {
   return grupo
 }
 
-function crearClienteModelo() {
+function crearCliente(clienteData) {
   const g = new THREE.Group()
 
   const cuerpo = new THREE.Mesh(
     new THREE.CylinderGeometry(0.28, 0.32, 1.0, 20),
-    new THREE.MeshStandardMaterial({ color: Math.random() * 0xffffff }),
+    new THREE.MeshStandardMaterial({ color: clienteData.color }),
   )
   cuerpo.position.y = 0.5
   g.add(cuerpo)
 
-  const cabeza = new THREE.Mesh(
-    new THREE.SphereGeometry(0.22, 20, 20),
-    new THREE.MeshStandardMaterial({ color: 0xf1c27d }),
-  )
+  // Cabeza como imagen sprite
+  const textureLoader = new THREE.TextureLoader()
+  const faceTexture = textureLoader.load(clienteData.imagen)
+  const faceMaterial = new THREE.SpriteMaterial({ map: faceTexture, transparent: true })
+  const cabeza = new THREE.Sprite(faceMaterial)
+  cabeza.scale.set(faceScale, faceScale, 1)
   cabeza.position.y = 1.25
   g.add(cabeza)
 
@@ -310,37 +302,16 @@ function crearClienteModelo() {
   return g
 }
 
-function crearClienteImagen() {
-  const texture = new THREE.TextureLoader().load(
-    personsImgPath + peronsImgs[Math.floor(Math.random() * peronsImgs.length)],
-  )
-  const material = new THREE.SpriteMaterial({ map: texture, transparent: true })
-  const sprite = new THREE.Sprite(material)
-  sprite.scale.copy(clienteImagenScale)
-  return sprite
-}
-
-function crearCliente() {
-  if (useImagesClientes.value) {
-    return crearClienteImagen()
-  }
-  else {
-    return crearClienteModelo()
-  }
-}
-
-function actualizarCola(grupo, cantidad) {
+function actualizarCola(grupo, cola) {
   grupo.userData.clientes.forEach((c) => grupo.remove(c))
   grupo.userData.clientes = []
-
-  for (let i = 0; i < cantidad; i++) {
-    const cliente = crearCliente()
-    if (useImagesClientes.value) {
-      const offsetX = (Math.random() - 0.5) * clienteXOffset
-      cliente.position.set(1 + offsetX, 1.7, 2.5 + i * 1.25)
-    } else {
-      cliente.position.set(1, 0, 2.5 + i * 1.25)
-    }
+  if (!cola || cola.length < 1) return
+  console.log(cola.length)
+  for (let i = 0; i < cola.length; i++) {
+    const cliente = crearCliente(cola[i])
+    const offsetX = Math.random() * 0.8 - 0.2
+    cliente.position.set(1 + offsetX, 0, 2.5 + i * 1.25)
+    // cliente.position.set(1, 0, 2.5 + i * 1.25)
     grupo.add(cliente)
     grupo.userData.clientes.push(cliente)
   }
@@ -355,8 +326,6 @@ function syncScene() {
 }
 
 function init() {
-  console.log(cajas.value)
-
   scene = new THREE.Scene()
 
   // fondo
@@ -497,35 +466,18 @@ function animate() {
   }
 
   renderer.render(scene, camera)
-
-  if (saveFrames.value) {
-    const now = Date.now()
-    if (now - lastFrameTimestamp > FRAME_CAPTURE_INTERVAL_SEC * 1000) {
-      renderer.domElement.toBlob(
-        (blob) => {
-          lastFrameBlob = blob
-          lastFrameTimestamp = now
-          sendFrameToServer()
-        },
-        'image/jpeg',
-        0.95,
-      )
-    }
-  }
 }
 
-async function sendFrameToServer() {
-  if (!lastFrameBlob) return
-  try {
-    await axios.post(URL_FRAME_TEST, lastFrameBlob, {
-      headers: {
-        'Content-Type': 'image/jpeg',
-      },
-      timeout: 5000,
-    })
-  } catch (error) {
-    console.error('Error enviando frame al servidor:', error)
-  }
+function downloadFrame() {
+  if (!renderer) return
+  renderer.domElement.toBlob((blob) => {
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `frame-${Date.now()}.jpg`
+    link.click()
+    URL.revokeObjectURL(url)
+  }, 'image/jpeg', 0.95)
 }
 
 function onResize() {
@@ -542,11 +494,6 @@ watch(mostrarReferenciasEspaciales, (val) => {
   else limpiarReferenciasEspaciales()
 })
 
-// watch toggle para clientes imagen vs modelos 3d
-watch(useImagesClientes, () => {
-  renderizarCajas()
-  syncScene()
-})
 
 // watch camera mode
 watch(cameraMode, (mode) => {
@@ -561,9 +508,9 @@ watch(cameraMode, (mode) => {
   controls.update()
 })
 
-// watch para cambios en los props de cajas
+// watch para cambios en los props de simulacion
 watch(
-  () => props.cajas,
+  () => props.simulacion,
   () => {
     renderizarCajas()
     syncScene()
@@ -612,6 +559,26 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+.btn-download {
+  padding: 6px 12px;
+  background: #667eea;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background 0.2s;
+}
+
+.btn-download:hover {
+  background: #5568d3;
+}
+
+.btn-download:active {
+  background: #4a5ac6;
 }
 
 .modal-top {
