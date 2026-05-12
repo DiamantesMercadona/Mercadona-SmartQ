@@ -1,0 +1,216 @@
+.scene {
+  width: 100%;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.controls-panel {
+  position: fixed;
+  top: 18px;
+  left: 18px;
+  background: rgba(15, 23, 42, 0.8);
+  color: #f1f5f9;
+  padding: 12px 16px;
+  border-radius: 12px;
+  z-index: 60;
+  pointer-events: auto;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  box-shadow: 0 10px 34px rgba(2, 6, 23, 0.62);
+  backdrop-filter: blur(6px) saturate(120%);
+}
+
+.controls-panel select {
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02));
+  color: #f8fafc;
+  min-width: 140px;
+  cursor: pointer;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  box-shadow: inset 0 -2px 6px rgba(2, 6, 23, 0.2);
+}
+
+.controls-panel select:focus {
+  outline: 2px solid rgba(99, 102, 241, 0.18);
+  outline-offset: 2px;
+}
+
+.controls-panel select option {
+  background: rgba(15, 23, 42, 0.98);
+  color: #f8fafc;
+  font-weight: 600;
+}
+
+.controls-panel label {
+  color: inherit;
+}
+
+.controls-panel .toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-download {
+  padding: 8px 14px;
+  background: linear-gradient(90deg, #6d8cff, #7b61ff);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.12s ease;
+  box-shadow: 0 6px 18px rgba(79, 70, 229, 0.22);
+}
+
+.btn-download:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 26px rgba(79, 70, 229, 0.26);
+}
+
+.btn-download:active {
+  transform: translateY(0);
+}
+
+.modal-top {
+  position: fixed;
+  top: 16px;
+  right: 18px;
+  left: auto;
+  display: flex;
+  justify-content: center;
+  z-index: 20;
+  pointer-events: none;
+}
+
+.modal {
+  width: min(92vw, 380px);
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.98), rgba(15, 23, 42, 0.96));
+  color: #f8fafc;
+  border-radius: 16px;
+  padding: 0;
+  box-shadow:
+    0 25px 60px rgba(2, 6, 23, 0.6),
+    inset 0 1px 1px rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+  pointer-events: auto;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  backdrop-filter: blur(8px);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 12px;
+  padding: 18px 24px;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.9) 0%, rgba(168, 85, 247, 0.9) 100%);
+  color: white;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+
+.modal-header::before {
+  content: '📷';
+  font-size: 20px;
+}
+
+.status-badge {
+  padding: 6px 14px;
+  border-radius: 50px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.status-badge.open {
+  background: rgba(46, 204, 113, 0.9);
+  color: white;
+}
+
+.status-badge.closed {
+  background: rgba(231, 76, 60, 0.9);
+  color: white;
+}
+
+.modal-content {
+  padding: 20px 24px;
+}
+
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+}
+
+.info-row:last-child {
+  border-bottom: none;
+}
+
+.info-label {
+  font-size: 14px;
+  color: #cbd5e1;
+  font-weight: 600;
+}
+
+.info-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: #e0e7ff;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(168, 85, 247, 0.15));
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  font-family: 'Monaco', 'Courier New', monospace;
+}
+
+.tooltip {
+  position: fixed;
+  pointer-events: none;
+}
+
+.tooltip-card {
+  background: rgba(2, 6, 23, 0.95);
+  color: #f8fafc;
+  border-radius: 12px;
+  padding: 8px 14px;
+  box-shadow: 0 10px 26px rgba(2, 6, 23, 0.66);
+  display: inline-block;
+  pointer-events: none;
+  font-weight: 800;
+  font-size: 15px;
+}
+
+.tooltip-header {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.tooltip-content {
+  margin-top: 6px;
+  font-weight: 800;
+  color: #f8fafc;
+  font-size: 14px;
+}

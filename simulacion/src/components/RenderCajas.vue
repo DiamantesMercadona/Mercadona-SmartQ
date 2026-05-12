@@ -14,8 +14,7 @@
     <label class="toggle">
       <input type="checkbox" v-model="mostrarReferenciasEspaciales" /> Referencias espaciales
     </label>
-    <label class="toggle">
-      <input type="checkbox" v-model="mostrarLabels" /> Etiquetas </label>
+    <label class="toggle"> <input type="checkbox" v-model="mostrarLabels" /> Etiquetas </label>
     <label class="toggle">
       <input type="checkbox" v-model="saveFrames" /> Enviar frames al servidor
     </label>
@@ -42,14 +41,15 @@
     <div v-if="mostrarReferenciasEspaciales && cameraMode === 'libre'" class="modal-top">
       <div class="modal">
         <div class="modal-header">
-          <h2>Modo cámara libre</h2>
+          <h2>Cámara Libre</h2>
         </div>
-        <div>
-          <div>
-            <div class="info-value">
-              Posición: ({{ camera.position.x.toFixed(1) }}, {{ camera.position.y.toFixed(1) }},
+        <div style="padding: 18px 24px">
+          <div class="info-row">
+            <span class="info-label">Posición:</span>
+            <span class="info-value">
+              ({{ camera.position.x.toFixed(1) }}, {{ camera.position.y.toFixed(1) }},
               {{ camera.position.z.toFixed(1) }})
-            </div>
+            </span>
           </div>
         </div>
       </div>
@@ -59,11 +59,11 @@
 
 <script setup>
 import { ref, onMounted, onBeforeUnmount, reactive, computed, watch, render } from 'vue'
+import './RenderCajas.css'
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
-import axios from 'axios'
-import { getRandomFace, getAlvaroFace } from '@/utils/getFace'
+import { getRandomFace, getAlvaroFace, imagenCarrito } from '@/utils/imagesUtils'
 
 const gtlfCajaPath = '/assets/3dmodels/psx_cashier_stand/scene.gltf'
 
@@ -87,6 +87,7 @@ const sueloLargo = 40
 const sueloAncho = 20
 
 const faceScale = 0.75
+const carritoScale = 2.7
 
 const mostrarReferenciasEspaciales = ref(false)
 const mostrarLabels = ref(true)
@@ -101,6 +102,20 @@ const posicionesCamara = {
 const container = ref(null)
 let scene, camera, renderer, animationId, gltfLoader, cajaModelo, controls, canvas
 let referenciasEspaciales = []
+
+// WASD camera movement
+const keysPressed = { w: false, a: false, s: false, d: false }
+const cameraWASDSpeed = 0.12
+
+function onKeyDown(e) {
+  const k = (e.key || '').toLowerCase()
+  if (k in keysPressed) keysPressed[k] = true
+}
+
+function onKeyUp(e) {
+  const k = (e.key || '').toLowerCase()
+  if (k in keysPressed) keysPressed[k] = false
+}
 
 const cajasMesh = []
 
@@ -269,6 +284,22 @@ function crearCaja(caja, x) {
   return grupo
 }
 
+function crearCarrito() {
+  const g = new THREE.Group()
+
+  const textureLoader = new THREE.TextureLoader()
+  const carritoTexture = textureLoader.load(imagenCarrito)
+
+  const carrito = new THREE.Sprite(
+    new THREE.SpriteMaterial({ map: carritoTexture, transparent: true }),
+  )
+  // usar la escala global para que el carrito sea del tamaño de la persona
+  carrito.scale.set(carritoScale, carritoScale, 1)
+  g.add(carrito)
+
+  return g
+}
+
 function crearCliente(clienteData) {
   const g = new THREE.Group()
 
@@ -298,6 +329,14 @@ function crearCliente(clienteData) {
   const brazoDer = brazoIzq.clone()
   brazoDer.position.x = 0.35
   g.add(brazoDer)
+
+  // Añadir carrito solo si el cliente lo utiliza
+  if (clienteData.usaCarrito) {
+    const carrito = crearCarrito()
+    // posicionar a la altura aproximada de la persona
+    carrito.position.set(0.5, 1, 0.15)
+    g.add(carrito)
+  }
 
   return g
 }
@@ -366,6 +405,10 @@ function init() {
   controls.enableDamping = true
   controls.enabled = cameraMode.value === 'libre'
   controls.update()
+
+  // key listeners para movimiento WASD
+  window.addEventListener('keydown', onKeyDown)
+  window.addEventListener('keyup', onKeyUp)
 
   // luces
   const ambient = new THREE.AmbientLight(0xffffff, 1.3)
@@ -445,6 +488,27 @@ function init() {
 function animate() {
   animationId = requestAnimationFrame(animate)
   if (controls) controls.update()
+  // aplicar movimiento WASD cuando la cámara está en modo libre
+  if (controls && controls.enabled && camera) {
+    const moveX = (keysPressed.d ? 1 : 0) - (keysPressed.a ? 1 : 0)
+    const moveZ = (keysPressed.w ? 1 : 0) - (keysPressed.s ? 1 : 0)
+    if (moveX !== 0 || moveZ !== 0) {
+      const forward = new THREE.Vector3()
+      camera.getWorldDirection(forward)
+      forward.y = 0
+      forward.normalize()
+
+      const right = new THREE.Vector3()
+      right.crossVectors(forward, camera.up).normalize()
+
+      const delta = new THREE.Vector3()
+      delta.copy(forward).multiplyScalar(moveZ * cameraWASDSpeed)
+      delta.addScaledVector(right, moveX * cameraWASDSpeed)
+
+      camera.position.add(delta)
+      controls.target.add(delta)
+    }
+  }
   // actualizar posiciones de todos los tooltips para que siempre sean visibles
   if (cajasMesh.length) {
     cajasMesh.forEach((mesh) => {
@@ -470,14 +534,18 @@ function animate() {
 
 function downloadFrame() {
   if (!renderer) return
-  renderer.domElement.toBlob((blob) => {
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `frame-${Date.now()}.jpg`
-    link.click()
-    URL.revokeObjectURL(url)
-  }, 'image/jpeg', 0.95)
+  renderer.domElement.toBlob(
+    (blob) => {
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `frame-${Date.now()}.jpg`
+      link.click()
+      URL.revokeObjectURL(url)
+    },
+    'image/jpeg',
+    0.95,
+  )
 }
 
 function onResize() {
@@ -493,7 +561,6 @@ watch(mostrarReferenciasEspaciales, (val) => {
   if (val) crearReferenciasEspaciales()
   else limpiarReferenciasEspaciales()
 })
-
 
 // watch camera mode
 watch(cameraMode, (mode) => {
@@ -526,171 +593,8 @@ onBeforeUnmount(() => {
   controls?.dispose()
   limpiarReferenciasEspaciales()
   renderer?.dispose()
+  // limpiar listeners de teclado
+  window.removeEventListener('keydown', onKeyDown)
+  window.removeEventListener('keyup', onKeyUp)
 })
 </script>
-
-<style scoped>
-.scene {
-  width: 100%;
-  height: 100vh;
-  overflow: hidden;
-}
-
-.controls-panel {
-  position: fixed;
-  top: 12px;
-  left: 12px;
-  background: rgba(255, 255, 255, 0.9);
-  padding: 8px 10px;
-  border-radius: 8px;
-  z-index: 50;
-  pointer-events: auto;
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  font-size: 14px;
-}
-
-.controls-panel select {
-  padding: 4px 6px;
-}
-
-.controls-panel .toggle {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.btn-download {
-  padding: 6px 12px;
-  background: #667eea;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 500;
-  transition: background 0.2s;
-}
-
-.btn-download:hover {
-  background: #5568d3;
-}
-
-.btn-download:active {
-  background: #4a5ac6;
-}
-
-.modal-top {
-  position: fixed;
-  top: 16px;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  justify-content: center;
-  z-index: 20;
-  pointer-events: none;
-}
-
-.modal {
-  width: min(92vw, 420px);
-  background: #ffffff;
-  border-radius: 12px;
-  padding: 0;
-  box-shadow: 0 16px 38px rgba(0, 0, 0, 0.22);
-  overflow: hidden;
-  pointer-events: auto;
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 20px 24px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-}
-
-.modal-header h2 {
-  margin: 0;
-  font-size: 24px;
-  font-weight: 600;
-}
-
-.status-badge {
-  padding: 6px 14px;
-  border-radius: 50px;
-  font-size: 12px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.status-badge.open {
-  background: rgba(46, 204, 113, 0.9);
-  color: white;
-}
-
-.status-badge.closed {
-  background: rgba(231, 76, 60, 0.9);
-  color: white;
-}
-
-.modal-content {
-  padding: 20px 24px;
-}
-
-.info-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 0;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
-}
-
-.info-row:last-child {
-  border-bottom: none;
-}
-
-.info-label {
-  font-size: 16px;
-  color: #555;
-  font-weight: 500;
-}
-
-.info-value {
-  font-size: 20px;
-  font-weight: 700;
-  color: #333;
-  background: #f0f0f0;
-  padding: 4px 12px;
-  border-radius: 20px;
-}
-
-.tooltip {
-  position: fixed;
-  pointer-events: none;
-}
-
-.tooltip-card {
-  background: #ffffff;
-  border-radius: 10px;
-  padding: 8px 12px;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.16);
-  display: inline-block;
-  pointer-events: none;
-}
-
-.tooltip-header {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.tooltip-content {
-  margin-top: 6px;
-  font-weight: 600;
-  color: #333;
-}
-</style>
