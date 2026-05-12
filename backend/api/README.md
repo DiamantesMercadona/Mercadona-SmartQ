@@ -74,6 +74,15 @@ El evento se publica en el canal configurado como `msq:video:events`.
 
 ### WS /api/v1/ws/video
 WebSocket para recibir eventos continuos del simulador y reenviarlos a Redis.
+El cliente debe enviar frames binarios. La API publica esos bytes en Redis y
+responde con un ACK tambien binario.
+
+### GET /api/v1/video/events/latest
+Devuelve el ultimo evento de video guardado en Redis como `application/octet-stream`.
+
+### WS /api/v1/ws/video/events
+WebSocket de salida para la parte derecha del sistema. La API se suscribe al
+canal Redis `msq:video:events` y reenvia cada evento a los clientes como bytes.
 
 ## Base de Datos
 
