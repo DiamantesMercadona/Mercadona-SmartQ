@@ -1,0 +1,2 @@
+- El modal de la camara no sirve, las cordenadas no se pueden utilizar luego en el codigo.
+- Hacer que se pueda guardar un video en formato mp4 del render

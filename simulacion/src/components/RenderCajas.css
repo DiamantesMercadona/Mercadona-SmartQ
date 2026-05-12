@@ -184,6 +184,51 @@
   font-family: 'Monaco', 'Courier New', monospace;
 }
 
+.info-row-code {
+  align-items: flex-start;
+}
+
+.camera-snippet {
+  margin: 0;
+  width: 100%;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #e0e7ff;
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid rgba(99, 102, 241, 0.22);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-family: 'Monaco', 'Courier New', monospace;
+}
+
+.btn-copy {
+  margin-top: 14px;
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.9), rgba(99, 102, 241, 0.92));
+  color: #f8fafc;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.12s ease;
+  box-shadow: 0 10px 22px rgba(37, 99, 235, 0.24);
+}
+
+.btn-copy:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 28px rgba(37, 99, 235, 0.28);
+}
+
+.btn-copy:active {
+  transform: translateY(0);
+}
+
 .tooltip {
   position: fixed;
   pointer-events: none;

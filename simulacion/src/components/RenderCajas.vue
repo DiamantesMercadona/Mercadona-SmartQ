@@ -64,6 +64,7 @@ import * as THREE from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { getRandomFace, getAlvaroFace, imagenCarrito } from '@/utils/imagesUtils'
+import FrameStreamer from '@/utils/frameStreamer.js'
 
 const gtlfCajaPath = '/assets/3dmodels/psx_cashier_stand/scene.gltf'
 
@@ -102,6 +103,7 @@ const posicionesCamara = {
 const container = ref(null)
 let scene, camera, renderer, animationId, gltfLoader, cajaModelo, controls, canvas
 let referenciasEspaciales = []
+const frameStreamer = new FrameStreamer()
 
 // WASD camera movement
 const keysPressed = { w: false, a: false, s: false, d: false }
@@ -345,8 +347,7 @@ function actualizarCola(grupo, cola) {
   grupo.userData.clientes.forEach((c) => grupo.remove(c))
   grupo.userData.clientes = []
   if (!cola || cola.length < 1) return
-  console.log(cola.length)
-  for (let i = 0; i < cola.length; i++) {
+    for (let i = 0; i < cola.length; i++) {
     const cliente = crearCliente(cola[i])
     const offsetX = Math.random() * 0.8 - 0.2
     cliente.position.set(1 + offsetX, 0, 2.5 + i * 1.25)
@@ -404,6 +405,10 @@ function init() {
   controls = new OrbitControls(camera, renderer.domElement)
   controls.enableDamping = true
   controls.enabled = cameraMode.value === 'libre'
+  // permitir zoom con la rueda y panning; ajustar distancias para permitir alejarse
+  controls.enablePan = true
+  controls.minDistance = 1
+  controls.maxDistance = 80
   controls.update()
 
   // key listeners para movimiento WASD
@@ -482,6 +487,10 @@ function init() {
   })
 
   animate()
+  // si el toggle ya estaba activo, iniciar streaming
+  if (saveFrames.value) {
+    frameStreamer.startStreaming(renderer, 10).catch((e) => console.error('FrameStreamer error:', e))
+  }
   window.addEventListener('resize', onResize)
 }
 
@@ -501,12 +510,22 @@ function animate() {
       const right = new THREE.Vector3()
       right.crossVectors(forward, camera.up).normalize()
 
-      const delta = new THREE.Vector3()
-      delta.copy(forward).multiplyScalar(moveZ * cameraWASDSpeed)
-      delta.addScaledVector(right, moveX * cameraWASDSpeed)
+    const delta = new THREE.Vector3()
+    delta.copy(forward).multiplyScalar(moveZ * cameraWASDSpeed)
+    delta.addScaledVector(right, moveX * cameraWASDSpeed)
 
-      camera.position.add(delta)
-      controls.target.add(delta)
+    // Evitar salir del área cuando se mueve con WASD: calcular posición propuesta y clamarla
+    const halfL = sueloLargo / 2
+    const halfW = sueloAncho / 2
+    const minY = 0.5
+    const proposedPos = camera.position.clone().add(delta)
+    proposedPos.x = Math.max(-halfL, Math.min(halfL, proposedPos.x))
+    proposedPos.z = Math.max(-halfW, Math.min(halfW, proposedPos.z))
+    proposedPos.y = Math.max(minY, proposedPos.y)
+
+    const appliedDelta = proposedPos.clone().sub(camera.position)
+    camera.position.add(appliedDelta)
+    controls.target.add(appliedDelta)
     }
   }
   // actualizar posiciones de todos los tooltips para que siempre sean visibles
@@ -521,12 +540,16 @@ function animate() {
   if (controls && controls.enabled && camera) {
     const halfL = sueloLargo / 2
     const halfW = sueloAncho / 2
-    const minY = 0.5
-    camera.position.x = Math.max(-halfL, Math.min(halfL, camera.position.x))
-    camera.position.z = Math.max(-halfW, Math.min(halfW, camera.position.z))
+    // Relajar límites para permitir alejarse con la rueda del ratón
+    const relaxFactor = 2.5
+    const maxX = halfL * relaxFactor
+    const maxZ = halfW * relaxFactor
+    const minY = 0.3
+    camera.position.x = Math.max(-maxX, Math.min(maxX, camera.position.x))
+    camera.position.z = Math.max(-maxZ, Math.min(maxZ, camera.position.z))
     camera.position.y = Math.max(minY, camera.position.y)
-    controls.target.x = Math.max(-halfL, Math.min(halfL, controls.target.x))
-    controls.target.z = Math.max(-halfW, Math.min(halfW, controls.target.z))
+    controls.target.x = Math.max(-maxX, Math.min(maxX, controls.target.x))
+    controls.target.z = Math.max(-maxZ, Math.min(maxZ, controls.target.z))
   }
 
   renderer.render(scene, camera)
@@ -547,6 +570,22 @@ function downloadFrame() {
     0.95,
   )
 }
+
+// watch para enviar frames al servidor usando FrameStreamer
+watch(saveFrames, async (val) => {
+  if (val) {
+    if (!renderer) return
+    try {
+      await frameStreamer.startStreaming(renderer, 10)
+    } catch (e) {
+      console.error('No se pudo iniciar FrameStreamer:', e)
+      saveFrames.value = false
+    }
+  } else {
+    frameStreamer.stopStreaming()
+    frameStreamer.disconnect()
+  }
+})
 
 function onResize() {
   if (!container.value) return
@@ -593,6 +632,9 @@ onBeforeUnmount(() => {
   controls?.dispose()
   limpiarReferenciasEspaciales()
   renderer?.dispose()
+  // detener streaming al salir
+  frameStreamer.stopStreaming()
+  frameStreamer.disconnect()
   // limpiar listeners de teclado
   window.removeEventListener('keydown', onKeyDown)
   window.removeEventListener('keyup', onKeyUp)
