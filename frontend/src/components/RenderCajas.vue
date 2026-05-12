@@ -18,6 +18,9 @@
     <label class="toggle">
       <input type="checkbox" v-model="saveFrames" /> Enviar frames al servidor
     </label>
+    <label class="toggle">
+      <input type="checkbox" v-model="useImagesClientes" /> Usar imágenes para clientes
+    </label>
   </div>
 
   <!-- Tooltips cajas -->
@@ -63,6 +66,8 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import axios from 'axios'
 
 const gtlfCajaPath = '/assets/3dmodels/psx_cashier_stand/scene.gltf'
+const personsImgPath = '/assets/persons/'
+const peronsImgs = ["p1.webp", "p2.webp", "p3.webp"]
 
 const props = defineProps({
   cajas: {
@@ -87,8 +92,15 @@ const espacioGrupos = 2.5
 const sueloLargo = 40
 const sueloAncho = 20
 
+const clienteXOffset = 1.5 
+const clienteImagenScaleX = 1.8
+const clienteImagenScaleY = 2.7 
+const clienteImagenScale = new THREE.Vector3(sizeCaja * clienteImagenScaleX, sizeCaja * clienteImagenScaleY, 1)
+
+
 const mostrarReferenciasEspaciales = ref(false)
 const mostrarLabels = ref(true)
+const useImagesClientes = ref(false)
 
 const cameraMode = ref('frontal') // libre, frontal, cenital. El por defecto no puese ser libre da error
 
@@ -256,7 +268,7 @@ function crearCaja(caja, x) {
   const modeloClone = cajaModelo.clone()
   grupo.add(modeloClone)
 
-  const dependiente = crearCliente()
+  const dependiente = crearClienteModelo()
   dependiente.position.set(1, 0, 0)
   grupo.add(dependiente)
   if (!caja.abierta) dependiente.visible = false
@@ -298,10 +310,23 @@ function crearClienteModelo() {
   return g
 }
 
-// function crearClienteImagen() {}
+function crearClienteImagen() {
+  const texture = new THREE.TextureLoader().load(
+    personsImgPath + peronsImgs[Math.floor(Math.random() * peronsImgs.length)],
+  )
+  const material = new THREE.SpriteMaterial({ map: texture, transparent: true })
+  const sprite = new THREE.Sprite(material)
+  sprite.scale.copy(clienteImagenScale)
+  return sprite
+}
 
 function crearCliente() {
-  return crearClienteModelo()
+  if (useImagesClientes.value) {
+    return crearClienteImagen()
+  }
+  else {
+    return crearClienteModelo()
+  }
 }
 
 function actualizarCola(grupo, cantidad) {
@@ -310,7 +335,12 @@ function actualizarCola(grupo, cantidad) {
 
   for (let i = 0; i < cantidad; i++) {
     const cliente = crearCliente()
-    cliente.position.set(1, 0, 2.5 + i * 1.25)
+    if (useImagesClientes.value) {
+      const offsetX = (Math.random() - 0.5) * clienteXOffset
+      cliente.position.set(1 + offsetX, 1.7, 2.5 + i * 1.25)
+    } else {
+      cliente.position.set(1, 0, 2.5 + i * 1.25)
+    }
     grupo.add(cliente)
     grupo.userData.clientes.push(cliente)
   }
@@ -512,6 +542,12 @@ watch(mostrarReferenciasEspaciales, (val) => {
   else limpiarReferenciasEspaciales()
 })
 
+// watch toggle para clientes imagen vs modelos 3d
+watch(useImagesClientes, () => {
+  renderizarCajas()
+  syncScene()
+})
+
 // watch camera mode
 watch(cameraMode, (mode) => {
   if (!camera) return
@@ -571,6 +607,7 @@ onBeforeUnmount(() => {
 .controls-panel select {
   padding: 4px 6px;
 }
+
 .controls-panel .toggle {
   display: flex;
   align-items: center;
