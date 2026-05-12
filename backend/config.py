@@ -23,18 +23,18 @@ CONFIG = {
 
     # Lógica de Negocio y Algoritmo de Decisión
     "DECISION": {
-
-        # Ponderaciones para el cálculo del tiempo estimado
-        "peso_persona": 1.5,            # Ponderación por persona detectada
-        "peso_carrito": 4.5,            # Ponderación por carrito detectado
+        "peso_persona": 1.5,            # Minutos de trabajo por persona
+        "peso_carrito": 4.5,            # Minutos de trabajo por carrito
         
-        # Umbrales de Apertura
-        "umbral_tiempo_alerta": 8,      # Apertura por tiempo estimado, en minutos
-        "umbral_grupos_max": 5,         # Apertura por saturación física de espacio, en número de grupos de personas
+        "umbral_tiempo_alerta": 8,      # Minutos de TEE para ABRIR caja
+        "umbral_grupos_max": 5,         # Grupos máximos para ABRIR caja (Saturación física)
         
-        # Umbrales de Cierre
-        "umbral_tiempo_cierre": 2,      # Sugerencia de cierre por tiempo, en minutos
-        "umbral_grupos_min": 2,         # Sugerencia de cierre por baja densidad, en número de grupos de personas
-        "tiempo_gracia_cierre": 30,     # Segundos de espera antes de confirmar cierre, en segundos
+        "umbral_tiempo_cierre": 2.5,    # Minutos de TEE para CERRAR caja
+        "umbral_grupos_min": 2,         # Grupos mínimos para CERRAR caja
+        "tiempo_gracia_cierre": 20,     # Segundos del cronómetro de cortesía
+        
+        "cajas_totales": 6,             # Límite físico del supermercado
+        "cooldown_abrir": 15,           # Segundos de bloqueo tras abrir caja
+        "cooldown_cerrar": 20           # Segundos de bloqueo tras cerrar caja
     }
 }
