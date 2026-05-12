@@ -18,6 +18,15 @@
     <label class="toggle">
       <input type="checkbox" v-model="saveFrames" /> Enviar frames al servidor
     </label>
+    <button
+      type="button"
+      class="btn-download"
+      :class="{ 'is-recording': isRecordingVideo }"
+      @click="toggleVideoRecording"
+    >
+      {{ isRecordingVideo ? 'Detener grabación' : 'Grabar video' }}
+    </button>
+    <span v-if="isRecordingVideo" class="recording-time">{{ recordingElapsedLabel }}</span>
     <button @click="downloadFrame" class="btn-download">Descargar frame</button>
   </div>
 
@@ -65,6 +74,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { getRandomFace, getAlvaroFace, imagenCarrito } from '@/utils/imagesUtils'
 import FrameStreamer from '@/utils/frameStreamer.js'
+import { createVideoRecorder } from '@/utils/videoRecorder.js'
 
 const gtlfCajaPath = '/assets/3dmodels/psx_cashier_stand/scene.gltf'
 
@@ -76,6 +86,8 @@ const props = defineProps({
 })
 
 const saveFrames = ref(false)
+const isRecordingVideo = ref(false)
+const recordingElapsedSeconds = ref(0)
 
 const cajas = computed(() => props.simulacion?.cajas ?? [])
 
@@ -104,6 +116,7 @@ const container = ref(null)
 let scene, camera, renderer, animationId, gltfLoader, cajaModelo, controls, canvas
 let referenciasEspaciales = []
 const frameStreamer = new FrameStreamer()
+let videoRecorder = null
 
 // WASD camera movement
 const keysPressed = { w: false, a: false, s: false, d: false }
@@ -347,7 +360,7 @@ function actualizarCola(grupo, cola) {
   grupo.userData.clientes.forEach((c) => grupo.remove(c))
   grupo.userData.clientes = []
   if (!cola || cola.length < 1) return
-    for (let i = 0; i < cola.length; i++) {
+  for (let i = 0; i < cola.length; i++) {
     const cliente = crearCliente(cola[i])
     const offsetX = Math.random() * 0.8 - 0.2
     cliente.position.set(1 + offsetX, 0, 2.5 + i * 1.25)
@@ -489,7 +502,9 @@ function init() {
   animate()
   // si el toggle ya estaba activo, iniciar streaming
   if (saveFrames.value) {
-    frameStreamer.startStreaming(renderer, 10).catch((e) => console.error('FrameStreamer error:', e))
+    frameStreamer
+      .startStreaming(renderer, 10)
+      .catch((e) => console.error('FrameStreamer error:', e))
   }
   window.addEventListener('resize', onResize)
 }
@@ -510,22 +525,22 @@ function animate() {
       const right = new THREE.Vector3()
       right.crossVectors(forward, camera.up).normalize()
 
-    const delta = new THREE.Vector3()
-    delta.copy(forward).multiplyScalar(moveZ * cameraWASDSpeed)
-    delta.addScaledVector(right, moveX * cameraWASDSpeed)
+      const delta = new THREE.Vector3()
+      delta.copy(forward).multiplyScalar(moveZ * cameraWASDSpeed)
+      delta.addScaledVector(right, moveX * cameraWASDSpeed)
 
-    // Evitar salir del área cuando se mueve con WASD: calcular posición propuesta y clamarla
-    const halfL = sueloLargo / 2
-    const halfW = sueloAncho / 2
-    const minY = 0.5
-    const proposedPos = camera.position.clone().add(delta)
-    proposedPos.x = Math.max(-halfL, Math.min(halfL, proposedPos.x))
-    proposedPos.z = Math.max(-halfW, Math.min(halfW, proposedPos.z))
-    proposedPos.y = Math.max(minY, proposedPos.y)
+      // Evitar salir del área cuando se mueve con WASD: calcular posición propuesta y clamarla
+      const halfL = sueloLargo / 2
+      const halfW = sueloAncho / 2
+      const minY = 0.5
+      const proposedPos = camera.position.clone().add(delta)
+      proposedPos.x = Math.max(-halfL, Math.min(halfL, proposedPos.x))
+      proposedPos.z = Math.max(-halfW, Math.min(halfW, proposedPos.z))
+      proposedPos.y = Math.max(minY, proposedPos.y)
 
-    const appliedDelta = proposedPos.clone().sub(camera.position)
-    camera.position.add(appliedDelta)
-    controls.target.add(appliedDelta)
+      const appliedDelta = proposedPos.clone().sub(camera.position)
+      camera.position.add(appliedDelta)
+      controls.target.add(appliedDelta)
     }
   }
   // actualizar posiciones de todos los tooltips para que siempre sean visibles
@@ -569,6 +584,43 @@ function downloadFrame() {
     'image/jpeg',
     0.95,
   )
+}
+
+const recordingElapsedLabel = computed(() => {
+  const totalSeconds = recordingElapsedSeconds.value
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  return `Grabando ${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+})
+
+function toggleVideoRecording() {
+  if (!videoRecorder && renderer) {
+    videoRecorder = createVideoRecorder(renderer, { fps: 30, filenamePrefix: 'render' })
+  }
+
+  if (isRecordingVideo.value) {
+    videoRecorder?.stop()
+    return
+  }
+
+  const started = videoRecorder?.start({
+    onTick: (elapsedSeconds) => {
+      recordingElapsedSeconds.value = elapsedSeconds
+    },
+    onStart: () => {
+      isRecordingVideo.value = true
+      recordingElapsedSeconds.value = 0
+    },
+    onStop: () => {
+      isRecordingVideo.value = false
+      recordingElapsedSeconds.value = 0
+    },
+  })
+
+  if (!started) {
+    isRecordingVideo.value = false
+    recordingElapsedSeconds.value = 0
+  }
 }
 
 // watch para enviar frames al servidor usando FrameStreamer
@@ -631,6 +683,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('resize', onResize)
   controls?.dispose()
   limpiarReferenciasEspaciales()
+  videoRecorder?.dispose()
   renderer?.dispose()
   // detener streaming al salir
   frameStreamer.stopStreaming()

@@ -8,19 +8,17 @@ import Simulacion from '../models/Simulacion.js'
 import Cliente from '@/models/Cliente.js'
 import RenderCajas from '../components/RenderCajas.vue'
 
-
 const simulacion = ref(null)
 const tiempoUpdateTestSec = 2
 simulacion.value = new Simulacion(6)
 
-
 function updateSimulacion() {
-  simulacion.value.cajas.forEach(caja => {
+  simulacion.value.cajas.forEach((caja) => {
     const agregarCliente = Math.random() < 0.5
     if (agregarCliente) {
       caja.cola.push(new Cliente())
-    }else{
-      if(caja.cola.length > 0){
+    } else {
+      if (caja.cola.length > 0) {
         caja.cola.shift()
       }
     }
@@ -28,12 +26,10 @@ function updateSimulacion() {
   })
 }
 
-
 onMounted(() => {
   setInterval(() => {
     updateSimulacion()
-  console.log(simulacion.value)
-
+    console.log(simulacion.value)
   }, tiempoUpdateTestSec * 1000)
 })
 </script>
