@@ -72,7 +72,7 @@ import './RenderCajas.css'
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
-import { getFacesRandomDependiente, getRandomCarrito, getRandomPersona } from '@/utils/imagesUtils'
+import { getFacesRandomDependiente, getRandomPersona } from '@/utils/imagesUtils'
 import FrameStreamer from '@/utils/frameStreamer.js'
 import { createVideoRecorder } from '@/utils/videoRecorder.js'
 
@@ -92,7 +92,7 @@ const recordingElapsedSeconds = ref(0)
 const cajas = computed(() => props.simulacion?.cajas ?? [])
 
 const sizeCaja = 1.5
-const separacionCajas = 2.2 + sizeCaja
+const separacionCajas = 3.5 + sizeCaja
 const cajasPorGrupo = 3
 const espacioGrupos = 2.5
 
@@ -105,7 +105,7 @@ const carritoScale = 2.3
 const carritoPosition = new THREE.Vector3(1.5, -0.5, 0)
 
 const mostrarReferenciasEspaciales = ref(false)
-const mostrarLabels = ref(true)
+const mostrarLabels = ref(false)
 
 const cameraMode = ref('libre') // libre, frontal, cenital
 
@@ -270,10 +270,17 @@ function renderizarCajas() {
 
   limpiarCajasEscena()
 
-  cajas.value.forEach((caja, i) => {
+  const posicionesX = cajas.value.map((_, i) => {
     const grupoIndex = Math.floor(i / cajasPorGrupo)
-    const x =
-      (i - (cajas.value.length - 1) / 2) * (separacionCajas + 0.5) + grupoIndex * espacioGrupos
+    return (i - (cajas.value.length - 1) / 2) * (separacionCajas + 0.5) + grupoIndex * espacioGrupos
+  })
+
+  const minX = Math.min(...posicionesX)
+  const maxX = Math.max(...posicionesX)
+  const centroX = (minX + maxX) / 2
+
+  cajas.value.forEach((caja, i) => {
+    const x = posicionesX[i] - centroX
     const modelo = crearCaja(caja, x)
     cajasMesh.push(modelo)
     scene.add(modelo)
@@ -302,14 +309,20 @@ function crearCaja(caja, x) {
   return grupo
 }
 
-function crearCarrito() {
+function crearCarrito(imgCarrito) {
   const g = new THREE.Group()
 
   const textureLoader = new THREE.TextureLoader()
-  const carritoTexture = textureLoader.load(getRandomCarrito())
+  const carritoTexture = textureLoader.load(imgCarrito)
+  carritoTexture.colorSpace = THREE.SRGBColorSpace
 
   const carrito = new THREE.Sprite(
-    new THREE.SpriteMaterial({ map: carritoTexture, transparent: true }),
+    new THREE.SpriteMaterial({
+      map: carritoTexture,
+      transparent: true,
+      alphaTest: 0.18,
+      color: 0xd6d6d6,
+    }),
   )
   carrito.scale.set(carritoScale, carritoScale, 1)
   g.add(carrito)
@@ -331,7 +344,13 @@ function crearDependiente(clienteData) {
   // Cabeza como imagen sprite
   const textureLoader = new THREE.TextureLoader()
   const faceTexture = textureLoader.load(clienteData.imagen)
-  const faceMaterial = new THREE.SpriteMaterial({ map: faceTexture, transparent: true })
+  faceTexture.colorSpace = THREE.SRGBColorSpace
+  const faceMaterial = new THREE.SpriteMaterial({
+    map: faceTexture,
+    transparent: true,
+    alphaTest: 0.18,
+    color: 0xd6d6d6,
+  })
   const cabeza = new THREE.Sprite(faceMaterial)
   cabeza.scale.set(faceScale, faceScale, 1)
   cabeza.position.y = 1.25
@@ -348,30 +367,30 @@ function crearDependiente(clienteData) {
   brazoDer.position.x = 0.35
   g.add(brazoDer)
 
-  // Añadir carrito solo si el cliente lo utiliza
-  if (clienteData.usaCarrito) {
-    const carrito = crearCarrito()
-    carrito.position.copy(carritoPosition)
-    g.add(carrito)
-  }
-
   return g
 }
 
 function crearCliente(clienteData) {
   const g = new THREE.Group()
 
-  // Usar sprite de imagen de persona
+  // Ajustes de textura para evitar aspecto lavado y mejorar contraste visual.
   const textureLoader = new THREE.TextureLoader()
   const personaTexture = textureLoader.load(getRandomPersona())
-  const personaMaterial = new THREE.SpriteMaterial({ map: personaTexture, transparent: true })
+  personaTexture.colorSpace = THREE.SRGBColorSpace
+
+  const personaMaterial = new THREE.SpriteMaterial({
+    map: personaTexture,
+    transparent: true,
+    alphaTest: 0.18,
+    color: 0xd6d6d6,
+  })
   const persona = new THREE.Sprite(personaMaterial)
   persona.scale.set(2.5, 3.5, 1)
   g.add(persona)
 
   // Añadir carrito solo si el cliente lo utiliza
-  if (clienteData.usaCarrito) {
-    const carrito = crearCarrito()
+  if (clienteData.imgCarrito != null) {
+    const carrito = crearCarrito(clienteData.imgCarrito)
     carrito.position.copy(carritoPosition)
     g.add(carrito)
   }
@@ -385,8 +404,15 @@ function actualizarCola(grupo, cola) {
   if (!cola || cola.length < 1) return
   for (let i = 0; i < cola.length; i++) {
     const cliente = crearCliente(cola[i])
-    const offsetX = Math.random() * 1.3
-    cliente.position.set(1 + offsetX, 1.5, 2.5 + i * 1.25)
+    const zigzag = i % 2 === 0 ? -0.35 : 0.35
+    const offsetX =
+      1.2 +
+      zigzag +
+      Math.sin(i * 1.1) * 0.45 +
+      Math.cos(i * 0.65) * 0.25 +
+      (Math.random() - 0.5) * 0.6
+    const offsetZ = 2.35 + i * 1.15 + Math.sin(i * 0.85) * 0.5 + (Math.random() - 0.5) * 0.65
+    cliente.position.set(offsetX, 1.5, offsetZ)
     grupo.add(cliente)
     grupo.userData.clientes.push(cliente)
   }

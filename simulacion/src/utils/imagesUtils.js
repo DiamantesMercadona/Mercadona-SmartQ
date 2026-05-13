@@ -23,7 +23,9 @@ const facesArray2 = [
 
 const carrosArray = ['c1.png', 'c2.png', 'c3.png', 'c4.png', 'c5.png', 'c6.png']
 
-const personasArray = ['p1.png', 'p2.png', 'p3.png', 'p4.png']
+const personasArray = ['p1.png', 'p2.png', 'p3.png', 'p4.png', 'p5.png', 'p6.png', 'p7.png']
+
+let personaPrevIndex = -1
 
 function getRandomFace() {
   const randomIndex = Math.floor(Math.random() * facesArray.length)
@@ -41,7 +43,11 @@ function getRandomCarrito() {
 }
 
 function getRandomPersona() {
-  const randomIndex = Math.floor(Math.random() * personasArray.length)
+  let randomIndex = -1
+  do {
+    randomIndex = Math.floor(Math.random() * personasArray.length)
+  } while (personaPrevIndex === randomIndex)
+  personaPrevIndex = randomIndex
   return personsImgPath + personasArray[randomIndex]
 }
 

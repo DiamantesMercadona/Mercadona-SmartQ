@@ -3,3 +3,9 @@
 - Modificar posicion de las cajas. ???
 
 - Añadir imagen de carrito a la classe cliente para que no se cambie cada vez que se renderiza el cliente.
+
+- Ajustar constraste imagenes
+
+- Añadir imagenes para paredes con tematica de Mercadona
+
+- Que las personas se muevan al desaparecer, que no simplemente desaparezcan.

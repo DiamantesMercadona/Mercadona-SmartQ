@@ -26,12 +26,12 @@ function updateSimulacion() {
   })
 }
 
-onMounted(() => {
-  setInterval(() => {
-    updateSimulacion()
-    console.log(simulacion.value)
-  }, tiempoUpdateTestSec * 1000)
-})
+// onMounted(() => {
+//   setInterval(() => {
+//     updateSimulacion()
+//     console.log(simulacion.value)
+//   }, tiempoUpdateTestSec * 1000)
+// })
 </script>
 
 <style></style>
