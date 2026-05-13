@@ -16,6 +16,9 @@ from .redis_client import (
 
 router = APIRouter()
 
+# ---------------------------------------------------------
+# MODELOS
+# ---------------------------------------------------------
 
 class VideoEvent(BaseModel):
     camera_id: str = Field(default="simulador-3d", examples=["simulador-3d"])
@@ -26,22 +29,39 @@ class VideoEvent(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
+class PulseraEvent(BaseModel):
+    pulsera_id: str
+    evento: str
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class DisplayEvent(BaseModel):
+    mensaje: str
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+# ---------------------------------------------------------
+# REDIS HEALTH
+# ---------------------------------------------------------
+
 @router.get("/redis/health")
 async def redis_health():
-    """
-    Comprueba que la API puede conectar con Redis.
-    """
     try:
-        return {"redis": "ok", "channel": get_video_channel(), "connected": await ping_redis()}
+        return {
+            "redis": "ok",
+            "channel": get_video_channel(),
+            "connected": await ping_redis()
+        }
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"No se pudo conectar con Redis: {exc}")
 
 
+# ---------------------------------------------------------
+# VIDEO: PUBLICAR EVENTO
+# ---------------------------------------------------------
+
 @router.post("/video/events", status_code=202)
 async def publish_video_event(event: VideoEvent):
-    """
-    Recibe una medicion/frame del simulador y lo publica en Redis Pub/Sub.
-    """
     payload = event.model_dump(mode="json")
     payload_bytes = event.model_dump_json().encode("utf-8")
     channel = get_video_channel()
@@ -60,11 +80,12 @@ async def publish_video_event(event: VideoEvent):
     }
 
 
+# ---------------------------------------------------------
+# VIDEO: OBTENER ÚLTIMO EVENTO
+# ---------------------------------------------------------
+
 @router.get("/video/events/latest")
 async def get_latest_video_event():
-    """
-    Devuelve el ultimo evento de video guardado en Redis como bytes.
-    """
     try:
         payload = await get_bytes(get_video_latest_key())
     except Exception as exc:
@@ -76,11 +97,12 @@ async def get_latest_video_event():
     return Response(content=payload, media_type="application/octet-stream")
 
 
+# ---------------------------------------------------------
+# VIDEO: WEBSOCKET ENTRADA
+# ---------------------------------------------------------
+
 @router.websocket("/ws/video")
 async def video_stream(websocket: WebSocket):
-    """
-    WebSocket para recibir eventos continuos del simulador y reenviarlos a Redis.
-    """
     await websocket.accept()
     channel = get_video_channel()
 
@@ -90,9 +112,7 @@ async def video_stream(websocket: WebSocket):
             await set_bytes(get_video_latest_key(), payload)
             subscribers = await publish_bytes(channel, payload)
             await websocket.send_bytes(
-                f"Evento publicado en Redis; channel={channel}; subscribers={subscribers}".encode(
-                    "utf-8"
-                )
+                f"Evento publicado en Redis; channel={channel}; subscribers={subscribers}".encode("utf-8")
             )
     except WebSocketDisconnect:
         return
@@ -100,11 +120,12 @@ async def video_stream(websocket: WebSocket):
         await websocket.close(code=1011, reason=f"Error publicando en Redis: {exc}")
 
 
+# ---------------------------------------------------------
+# VIDEO: WEBSOCKET SALIDA
+# ---------------------------------------------------------
+
 @router.websocket("/ws/video/events")
 async def video_events_stream(websocket: WebSocket):
-    """
-    WebSocket de salida para reenviar a clientes los eventos binarios publicados en Redis.
-    """
     await websocket.accept()
     channel = get_video_channel()
 
@@ -115,3 +136,35 @@ async def video_events_stream(websocket: WebSocket):
         return
     except Exception as exc:
         await websocket.close(code=1011, reason=f"Error leyendo de Redis: {exc}")
+
+
+# ---------------------------------------------------------
+# NUEVO: WEBSOCKET PULSERA
+# ---------------------------------------------------------
+
+@router.websocket("/ws/pulsera")
+async def pulsera_stream(websocket: WebSocket):
+    await websocket.accept()
+    try:
+        async for payload in subscribe_bytes("canal_pulsera"):
+            await websocket.send_bytes(payload)
+    except WebSocketDisconnect:
+        return
+    except Exception as exc:
+        await websocket.close(code=1011, reason=f"Error leyendo eventos de pulsera: {exc}")
+
+
+# ---------------------------------------------------------
+# NUEVO: WEBSOCKET DISPLAY
+# ---------------------------------------------------------
+
+@router.websocket("/ws/display")
+async def display_stream(websocket: WebSocket):
+    await websocket.accept()
+    try:
+        async for payload in subscribe_bytes("canal_display"):
+            await websocket.send_bytes(payload)
+    except WebSocketDisconnect:
+        return
+    except Exception as exc:
+        await websocket.close(code=1011, reason=f"Error leyendo eventos de display: {exc}")
