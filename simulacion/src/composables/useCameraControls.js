@@ -4,9 +4,9 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 const CAMERA_SPEED = 0.12
 
 export const POSICIONES_CAMARA = {
-  libre: new THREE.Vector3(-0.2, 9.2, 9.2),
-  frontal: new THREE.Vector3(-0.2, 9.2, 9.2),
-  cenital: new THREE.Vector3(0, 20, 0.01),
+  libre: new THREE.Vector3(-0.24, 10.91, 16.99),
+  frontal: new THREE.Vector3(-0.24, 10.91, 16.99),
+  cenital: new THREE.Vector3(0.34, 22.14, 6.6),
 }
 
 export function initCameraControls(camera, renderer, initialMode) {

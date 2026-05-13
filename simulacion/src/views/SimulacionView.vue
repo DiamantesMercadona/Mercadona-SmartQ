@@ -3,23 +3,26 @@
     <RenderCajas :simulacion="simulacion" />
 
     <div class="ui-controls" v-if="simulacion">
-      <label for="cajaSelect">Caja</label>
-      <select id="cajaSelect" v-model.number="selectedCajaId">
-        <option v-for="caja in simulacion.cajas" :key="caja.id" :value="caja.id">
-          Caja {{ caja.id }}
-        </option>
-      </select>
-
-      <span class="estado-caja" :class="currentCaja?.abierta ? 'abierta' : 'cerrada'">
-        {{ currentCaja?.abierta ? 'Abierta' : 'Cerrada' }}
-      </span>
-
-      <button type="button" @click="abrirCajaUI">Abrir caja</button>
-      <button type="button" @click="cerrarCajaUI">Cerrar caja</button>
-      <button type="button" @click="agregarClienteUI" :disabled="!currentCaja?.abierta">
-        Añadir cliente
-      </button>
-      <button type="button" @click="removerClienteUI">Eliminar cliente</button>
+      <div class="ui-row">
+        <select id="cajaSelect" v-model.number="selectedCajaId">
+          <option v-for="caja in simulacion.cajas" :key="caja.id" :value="caja.id">
+            Caja {{ caja.id }}
+          </option>
+        </select>
+        <span
+          class="estado-dot"
+          :class="currentCaja?.abierta ? 'abierta' : 'cerrada'"
+          :title="currentCaja?.abierta ? 'Abierta' : 'Cerrada'"
+        ></span>
+      </div>
+      <div class="ui-row">
+        <button type="button" @click="abrirCajaUI">Abrir</button>
+        <button type="button" @click="cerrarCajaUI">Cerrar</button>
+        <button type="button" @click="agregarClienteUI" :disabled="!currentCaja?.abierta">
+          + Cliente
+        </button>
+        <button type="button" @click="removerClienteUI">− Cliente</button>
+      </div>
     </div>
   </div>
 </template>
@@ -68,45 +71,63 @@ function removerClienteUI() {
   right: 16px;
   z-index: 100;
   display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
+  flex-direction: column;
+  gap: 5px;
+  padding: 8px 10px;
   border-radius: 10px;
   background: rgba(17, 24, 39, 0.85);
   color: #e5e7eb;
+  font-size: 11px;
+  backdrop-filter: blur(6px);
+  box-shadow: 0 4px 16px rgba(2, 6, 23, 0.5);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.ui-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .ui-controls select,
 .ui-controls button {
-  border: 1px solid rgba(148, 163, 184, 0.45);
-  border-radius: 8px;
-  padding: 6px 10px;
-  background: #111827;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 6px;
+  padding: 3px 8px;
+  background: rgba(30, 41, 59, 0.9);
   color: #e5e7eb;
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .ui-controls button {
   cursor: pointer;
+  transition: background 0.1s ease;
+}
+
+.ui-controls button:hover {
+  background: rgba(51, 65, 85, 0.95);
 }
 
 .ui-controls button:disabled {
-  opacity: 0.45;
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
-.estado-caja {
-  font-weight: 600;
-  padding: 4px 10px;
-  border-radius: 999px;
+.estado-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
 }
 
-.estado-caja.abierta {
-  background: rgba(16, 185, 129, 0.2);
-  color: #6ee7b7;
+.estado-dot.abierta {
+  background: #10b981;
+  box-shadow: 0 0 5px rgba(16, 185, 129, 0.7);
 }
 
-.estado-caja.cerrada {
-  background: rgba(239, 68, 68, 0.2);
-  color: #fca5a5;
+.estado-dot.cerrada {
+  background: #ef4444;
+  box-shadow: 0 0 5px rgba(239, 68, 68, 0.7);
 }
 </style>

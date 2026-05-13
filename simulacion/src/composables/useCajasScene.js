@@ -1,6 +1,9 @@
 import * as THREE from 'three'
+import { ref } from 'vue'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { getFacesRandomDependiente, getRandomPersona } from '@/utils/imagesUtils'
+
+export const simulationSpeed = ref(1)
 
 const GLTF_CAJA_PATH = '/assets/3dmodels/psx_cashier_stand/scene.gltf'
 const SIZE_CAJA = 1.5
@@ -10,6 +13,60 @@ const ESPACIO_GRUPOS = 2.5
 const FACE_SCALE = 0.75
 const CARRITO_SCALE = 2.3
 const CARRITO_POSITION = new THREE.Vector3(1.5, -0.5, 0)
+
+// Local z in grupo space for animation endpoints.
+// Grupo is at world z = -12, so:
+//   floor front edge (world z = +16) → local z = +28
+//   back wall (world z = -16)        → local z = -4
+const ENTRY_Z = 28
+const EXIT_Z = -4
+
+// ─── Animation system ─────────────────────────────────────────────────────────
+
+const activeAnimations = []
+
+function easeInOut(t) {
+  return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t
+}
+
+function easeIn(t) {
+  return t * t
+}
+
+export function tickAnimations() {
+  for (let i = activeAnimations.length - 1; i >= 0; i--) {
+    const anim = activeAnimations[i]
+    anim.t = Math.min(1, anim.t + anim.speed * simulationSpeed.value)
+    anim.mesh.position.lerpVectors(anim.from, anim.to, anim.easing(anim.t))
+    if (anim.t >= 1) {
+      anim.onComplete?.()
+      activeAnimations.splice(i, 1)
+    }
+  }
+}
+
+function startAnimation(mesh, from, to, speed, easing, onComplete) {
+  const idx = activeAnimations.findIndex((a) => a.mesh === mesh)
+  if (idx !== -1) activeAnimations.splice(idx, 1)
+  activeAnimations.push({
+    mesh,
+    from: from.clone(),
+    to: to.clone(),
+    t: 0,
+    speed,
+    easing,
+    onComplete,
+  })
+}
+
+// ─── Client helpers ────────────────────────────────────────────────────────────
+
+function computeClientPos(i) {
+  const side = i % 2 === 0 ? -0.55 : 0.55
+  return new THREE.Vector3(1.2 + side + Math.sin(i * 2.3) * 0.12, 1.5, 2.4 + i * 1.8)
+}
+
+// ─── Character creators ────────────────────────────────────────────────────────
 
 export function cargarModeloCaja() {
   return new Promise((resolve) => {
@@ -85,29 +142,56 @@ export function crearCliente(data) {
   return g
 }
 
+// ─── Queue management ──────────────────────────────────────────────────────────
+
+// Instant placement — used only when building the scene from scratch.
 export function actualizarCola(grupo, cola) {
   grupo.userData.clientes.forEach((c) => grupo.remove(c))
   grupo.userData.clientes = []
-  if (!cola || cola.length < 1) return
-  for (let i = 0; i < cola.length; i++) {
-    const cliente = crearCliente(cola[i])
-    const zigzag = i % 2 === 0 ? -0.35 : 0.35
-    const offsetX =
-      1.2 +
-      zigzag +
-      Math.sin(i * 1.1) * 0.45 +
-      Math.cos(i * 0.65) * 0.25 +
-      (Math.random() - 0.5) * 0.6
-    const offsetZ = 2.35 + i * 1.15 + Math.sin(i * 0.85) * 0.5 + (Math.random() - 0.5) * 0.65
-    cliente.position.set(offsetX, 1.5, offsetZ)
+  cola.forEach((data, i) => {
+    const cliente = crearCliente(data)
+    cliente.position.copy(computeClientPos(i))
     grupo.add(cliente)
     grupo.userData.clientes.push(cliente)
+  })
+}
+
+// Incremental update with entry / exit animations — used for live changes.
+export function sincronizarCola(grupo, cola) {
+  const existentes = grupo.userData.clientes
+  const huboBajas = existentes.length > cola.length
+
+  // Clients that have been served: animate them past the caja toward the back wall.
+  while (existentes.length > cola.length) {
+    const mesh = existentes.shift()
+    const exitTarget = new THREE.Vector3(mesh.position.x, 1.5, EXIT_Z)
+    startAnimation(mesh, mesh.position.clone(), exitTarget, 0.022, easeIn, () => grupo.remove(mesh))
+  }
+
+  // Advance remaining clients toward the caja after someone was served.
+  if (huboBajas) {
+    existentes.forEach((mesh, i) => {
+      startAnimation(mesh, mesh.position.clone(), computeClientPos(i), 0.022, easeInOut, null)
+    })
+  }
+
+  // New clients: spawn at the store entrance and walk to their queue spot.
+  for (let i = existentes.length; i < cola.length; i++) {
+    const cliente = crearCliente(cola[i])
+    const target = computeClientPos(i)
+    const entryPos = new THREE.Vector3(target.x, 1.5, ENTRY_Z)
+    cliente.position.copy(entryPos)
+    grupo.add(cliente)
+    existentes.push(cliente)
+    startAnimation(cliente, entryPos, target, 0.022, easeInOut, null)
   }
 }
 
+// ─── Scene management ─────────────────────────────────────────────────────────
+
 function crearCajaGrupo(caja, x, cajaModelo) {
   const grupo = new THREE.Group()
-  grupo.position.set(x, 0, -7)
+  grupo.position.set(x, 0, -12)
   grupo.userData.caja = caja
   grupo.userData.clientes = []
 
@@ -127,6 +211,7 @@ function crearCajaGrupo(caja, x, cajaModelo) {
 }
 
 export function limpiarCajasEscena(scene, cajasMesh) {
+  activeAnimations.length = 0
   cajasMesh.forEach((m) => scene.remove(m))
   cajasMesh.length = 0
 }
@@ -153,7 +238,8 @@ export function syncScene(cajas, cajasMesh) {
   cajas.forEach((caja, i) => {
     const grupo = cajasMesh[i]
     if (!grupo) return
-    actualizarCola(grupo, caja.cola)
+
+    sincronizarCola(grupo, caja.cola)
 
     const depActual = grupo.userData.dependiente
     if (caja.dependiente && !depActual) {

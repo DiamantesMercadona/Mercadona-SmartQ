@@ -4,6 +4,10 @@
   <!-- Controls panel -->
   <div class="controls-panel">
     <label>
+      Velocidad: <strong>{{ simulationSpeed.toFixed(2) }}x</strong>
+      <input type="range" v-model.number="simulationSpeed" min="0.25" max="5" step="0.25" />
+    </label>
+    <label>
       Cámara:
       <select v-model="cameraMode">
         <option value="libre">Libre</option>
@@ -43,22 +47,19 @@
     </div>
   </div>
 
-  <!-- Free camera position overlay -->
-  <div v-if="mostrarReferenciasEspaciales && cameraMode === 'libre'" class="modal-top">
-    <div class="modal">
-      <div class="modal-header">
-        <h2>Cámara Libre</h2>
-      </div>
-      <div style="padding: 18px 24px">
-        <div class="info-row">
-          <span class="info-label">Posición:</span>
-          <span class="info-value">
-            ({{ camera.position.x.toFixed(1) }}, {{ camera.position.y.toFixed(1) }},
-            {{ camera.position.z.toFixed(1) }})
-          </span>
-        </div>
-      </div>
-    </div>
+  <!-- Free camera position panel -->
+  <div v-if="mostrarReferenciasEspaciales && cameraMode === 'libre'" class="camera-pos-panel">
+    <code class="camera-pos-coords"
+      >new THREE.Vector3({{ camera.position.x.toFixed(2) }}, {{ camera.position.y.toFixed(2) }},
+      {{ camera.position.z.toFixed(2) }})</code
+    >
+    <button
+      class="btn-copy-coords"
+      :class="{ copied: posicionCopiada }"
+      @click="copiarPosicionCamara"
+    >
+      {{ posicionCopiada ? '✓' : 'Copiar' }}
+    </button>
   </div>
 </template>
 
@@ -72,12 +73,18 @@ import { createVideoRecorder } from '@/utils/videoRecorder.js'
 import { crearFondoEscena, crearSuelo, crearLuces } from '@/composables/useSceneSetup.js'
 import { crearParedes } from '@/composables/useWalls.js'
 import { useTooltips } from '@/composables/useTooltips.js'
-import { cargarModeloCaja, renderizarCajas, syncScene } from '@/composables/useCajasScene.js'
+import {
+  cargarModeloCaja,
+  renderizarCajas,
+  syncScene,
+  tickAnimations,
+  simulationSpeed,
+} from '@/composables/useCajasScene.js'
 import { initCameraControls, POSICIONES_CAMARA } from '@/composables/useCameraControls.js'
 import { useReferenciasEspaciales } from '@/composables/useReferenciasEspaciales.js'
 
 const SUELO_LARGO = 40
-const SUELO_ANCHO = 20
+const SUELO_ANCHO = 32
 
 const props = defineProps({
   simulacion: { type: Object, default: null },
@@ -92,6 +99,7 @@ const recordingElapsedSeconds = ref(0)
 const cameraMode = ref('libre')
 const mostrarReferenciasEspaciales = ref(false)
 const mostrarLabels = ref(false)
+const posicionCopiada = ref(false)
 
 const tooltips = useTooltips()
 const refEspaciales = useReferenciasEspaciales(SUELO_LARGO, SUELO_ANCHO)
@@ -157,6 +165,7 @@ function animate() {
   animationId = requestAnimationFrame(animate)
   camControls.controls.update()
   camControls.updateWASD()
+  tickAnimations()
 
   cajasMesh.forEach((mesh) => {
     const id = mesh.userData?.caja?.id
@@ -171,6 +180,15 @@ function onResize() {
   camera.aspect = container.value.clientWidth / container.value.clientHeight
   camera.updateProjectionMatrix()
   renderer.setSize(container.value.clientWidth, container.value.clientHeight)
+}
+
+function copiarPosicionCamara() {
+  const { x, y, z } = camera.position
+  navigator.clipboard.writeText(
+    `new THREE.Vector3(${x.toFixed(2)}, ${y.toFixed(2)}, ${z.toFixed(2)})`,
+  )
+  posicionCopiada.value = true
+  setTimeout(() => (posicionCopiada.value = false), 1500)
 }
 
 function downloadFrame() {
@@ -241,12 +259,19 @@ watch(cameraMode, (mode) => {
   if (camControls) camControls.setMode(mode)
 })
 
+// Rebuild cajas only when their count changes (e.g. a new caja is added/removed).
+watch(
+  () => props.simulacion?.cajas?.length,
+  () => {
+    if (scene && cajaModelo)
+      renderizarCajas(scene, cajas.value, cajaModelo, cajasMesh, tooltips.initForCaja)
+  },
+)
+
+// Animate queue / state changes (client joins or leaves).
 watch(
   () => props.simulacion,
-  () => {
-    if (cajaModelo) renderizarCajas(scene, cajas.value, cajaModelo, cajasMesh, tooltips.initForCaja)
-    syncScene(cajas.value, cajasMesh)
-  },
+  () => syncScene(cajas.value, cajasMesh),
   { deep: true, immediate: true },
 )
 

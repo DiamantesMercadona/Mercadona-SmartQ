@@ -1,11 +1,2 @@
-- El modal de la camara no sirve, las cordenadas no se pueden utilizar luego en el codigo. (Dejar solo camara libre ???)
-- Modificar las camaras fijas.
-- Modificar posicion de las cajas. ???
-
-- Añadir imagen de carrito a la classe cliente para que no se cambie cada vez que se renderiza el cliente.
-
-- Ajustar constraste imagenes
-
-- Añadir imagenes para paredes con tematica de Mercadona
-
-- Que las personas se muevan al desaparecer, que no simplemente desaparezcan.
+- Probar nuevo render con el motor de deteccion de personas
+- Integracion con el backebd
