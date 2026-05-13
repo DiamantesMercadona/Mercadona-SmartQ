@@ -1,4 +1,7 @@
-from vision_engine import VisionEngine
+try:
+    from .vision_engine import VisionEngine
+except ImportError:
+    from vision_engine import VisionEngine
 
 def main():
 

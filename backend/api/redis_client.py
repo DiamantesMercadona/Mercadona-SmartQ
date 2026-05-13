@@ -1,10 +1,10 @@
-import json
+from contextlib import suppress
 from functools import lru_cache
-from typing import Any, AsyncIterator
+from typing import AsyncIterator
 
 from redis.asyncio import Redis
 
-from config import CONFIG
+from ..config import CONFIG
 
 
 @lru_cache(maxsize=1)
@@ -15,6 +15,9 @@ def get_redis_client() -> Redis:
         port=redis_config["redis_port"],
         db=redis_config.get("redis_db", 0),
         decode_responses=False,
+        socket_connect_timeout=5,
+        socket_timeout=5,
+        health_check_interval=30,
     )
 
 
@@ -24,11 +27,6 @@ def get_video_channel() -> str:
 
 def get_video_latest_key() -> str:
     return f"{get_video_channel()}:latest"
-
-
-async def publish_json(channel: str, payload: dict[str, Any]) -> int:
-    message = json.dumps(payload, ensure_ascii=True).encode("utf-8")
-    return await get_redis_client().publish(channel, message)
 
 
 async def publish_bytes(channel: str, payload: bytes) -> int:
@@ -48,6 +46,18 @@ async def get_bytes(key: str) -> bytes | None:
     return str(payload).encode("utf-8")
 
 
+async def publish_video_payload(payload: bytes) -> int:
+    """
+    Guarda el ultimo frame/evento y lo publica en el canal Redis de video.
+    """
+    await set_bytes(get_video_latest_key(), payload)
+    return await publish_bytes(get_video_channel(), payload)
+
+
+async def get_latest_video_payload() -> bytes | None:
+    return await get_bytes(get_video_latest_key())
+
+
 async def subscribe_bytes(channel: str) -> AsyncIterator[bytes]:
     pubsub = get_redis_client().pubsub()
     await pubsub.subscribe(channel)
@@ -62,8 +72,24 @@ async def subscribe_bytes(channel: str) -> AsyncIterator[bytes]:
             elif isinstance(payload, str):
                 yield payload.encode("utf-8")
     finally:
-        await pubsub.unsubscribe(channel)
-        await pubsub.close()
+        with suppress(Exception):
+            await pubsub.unsubscribe(channel)
+        close = getattr(pubsub, "aclose", pubsub.close)
+        with suppress(Exception):
+            await close()
+
+
+async def subscribe_video_payloads(include_latest: bool = False) -> AsyncIterator[bytes]:
+    """
+    Escucha el canal Redis de video y produce siempre bytes para WebSocket.
+    """
+    if include_latest:
+        latest = await get_latest_video_payload()
+        if latest is not None:
+            yield latest
+
+    async for payload in subscribe_bytes(get_video_channel()):
+        yield payload
 
 
 async def ping_redis() -> bool:
