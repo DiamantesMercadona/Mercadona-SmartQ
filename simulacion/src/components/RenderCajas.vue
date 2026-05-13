@@ -297,13 +297,15 @@ function crearCaja(caja, x) {
   const modeloClone = cajaModelo.clone()
   grupo.add(modeloClone)
 
-  const dependienteData = { color: 0x3b82f6, imagen: getFacesRandomDependiente() }
-  const dependiente = crearDependiente(dependienteData)
-  dependiente.position.set(1, 0, 0)
-  grupo.add(dependiente)
-  if (!caja.abierta) dependiente.visible = false
+  if (caja.dependiente) {
+    const dependiente = crearDependiente(caja.dependiente)
+    dependiente.position.set(1, 0, 0)
+    grupo.add(dependiente)
+    grupo.userData.dependiente = dependiente
+  } else {
+    grupo.userData.dependiente = null
+  }
 
-  grupo.userData.dependiente = dependiente
   grupo.userData.clientes = []
   actualizarCola(grupo, caja.cola)
   return grupo
@@ -330,20 +332,20 @@ function crearCarrito(imgCarrito) {
   return g
 }
 
-function crearDependiente(clienteData) {
+function crearDependiente(dependienteData = {}) {
   const g = new THREE.Group()
 
   // Modelo 3D original para el dependiente
   const cuerpo = new THREE.Mesh(
     new THREE.CylinderGeometry(0.28, 0.32, 1.0, 20),
-    new THREE.MeshStandardMaterial({ color: clienteData.color }),
+    new THREE.MeshStandardMaterial({ color: dependienteData.color ?? 0x3b82f6 }),
   )
   cuerpo.position.y = 0.5
   g.add(cuerpo)
 
   // Cabeza como imagen sprite
   const textureLoader = new THREE.TextureLoader()
-  const faceTexture = textureLoader.load(clienteData.imagen)
+  const faceTexture = textureLoader.load(dependienteData.imagen || getFacesRandomDependiente())
   faceTexture.colorSpace = THREE.SRGBColorSpace
   const faceMaterial = new THREE.SpriteMaterial({
     map: faceTexture,
@@ -375,7 +377,7 @@ function crearCliente(clienteData) {
 
   // Ajustes de textura para evitar aspecto lavado y mejorar contraste visual.
   const textureLoader = new THREE.TextureLoader()
-  const personaTexture = textureLoader.load(getRandomPersona())
+  const personaTexture = textureLoader.load(clienteData.imagen || getRandomPersona())
   personaTexture.colorSpace = THREE.SRGBColorSpace
 
   const personaMaterial = new THREE.SpriteMaterial({
@@ -420,9 +422,23 @@ function actualizarCola(grupo, cola) {
 
 function syncScene() {
   cajas.value.forEach((caja, i) => {
-    if (!cajasMesh[i]) return
-    actualizarCola(cajasMesh[i], caja.cola)
-    cajasMesh[i].userData.dependiente.visible = caja.abierta
+    const cajaGrupo = cajasMesh[i]
+    if (!cajaGrupo) return
+
+    actualizarCola(cajaGrupo, caja.cola)
+
+    const dependienteActual = cajaGrupo.userData.dependiente
+    if (caja.dependiente && !dependienteActual) {
+      const nuevoDependiente = crearDependiente(caja.dependiente)
+      nuevoDependiente.position.set(1, 0, 0)
+      cajaGrupo.add(nuevoDependiente)
+      cajaGrupo.userData.dependiente = nuevoDependiente
+    }
+
+    if (!caja.dependiente && dependienteActual) {
+      cajaGrupo.remove(dependienteActual)
+      cajaGrupo.userData.dependiente = null
+    }
   })
 }
 
