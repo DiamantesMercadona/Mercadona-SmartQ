@@ -83,6 +83,30 @@
   transform: translateY(0);
 }
 
+.btn-download.is-recording {
+  background: linear-gradient(90deg, #ef4444, #dc2626);
+  box-shadow: 0 6px 18px rgba(239, 68, 68, 0.3);
+  animation: recording-pulse 1.2s ease-in-out infinite;
+}
+
+.recording-time {
+  font-variant-numeric: tabular-nums;
+  color: #f87171;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.5px;
+}
+
+@keyframes recording-pulse {
+  0%,
+  100% {
+    box-shadow: 0 6px 18px rgba(239, 68, 68, 0.3);
+  }
+  50% {
+    box-shadow: 0 6px 28px rgba(239, 68, 68, 0.65);
+  }
+}
+
 .modal-top {
   position: fixed;
   top: 16px;
