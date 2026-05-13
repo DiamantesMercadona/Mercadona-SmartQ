@@ -5,8 +5,8 @@ CONFIG = {
         "input_source_type": "webcam",      # "webcam", "video" o "image"
         "source_index": 0,                  # ID de la cámara (Webcam = 0)
         "default_image": "backend/resources/test_photo.jpg",        # Imagen por defecto para pruebas
-        "default_video": "backend/resources/walking_demo.mp4",      # Video de prueba por defecto
-        "default_source": "backend/resources/walking_demo.mp4",     # Fuente por defecto si se usa un archivo
+        "default_video": "backend/resources/3d_demo.webm",      # Video de prueba por defecto
+        "default_source": "backend/resources/3d_demo.webm",     # Fuente por defecto si se usa un archivo
         "yolo_model": "yolov8n.pt",                                 # Modelo YOLO original para detección de personas
     },
 
