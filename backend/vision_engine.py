@@ -7,6 +7,7 @@ from datetime import datetime
 import os
 from scipy.cluster.hierarchy import fclusterdata
 import time
+import ctypes
 
 class VisionEngine:
     """
@@ -20,7 +21,7 @@ class VisionEngine:
         Inicializa los recursos del motor.
         """
         self.base_dir = os.path.dirname(__file__)
-        self.default_video = os.path.join(self.base_dir, "resources", "walking_demo.mp4")
+        self.default_video = os.path.join(self.base_dir, "resources", "3d_demo.webm")
 
         # Fuente de video
         if source is None:
@@ -29,6 +30,14 @@ class VisionEngine:
             source = os.path.join(self.base_dir, source)
 
         self.cap = cv2.VideoCapture(source)
+        self.window_name = 'MSQ Engine'
+
+        # Pantalla disponible para la ventana de visualizacion.
+        self.screen_width, self.screen_height = self._get_screen_size()
+        self.window_margin = 80
+        self.window_scale_min = 0.75
+
+        cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
 
         # Modelo YOLOv8 - optimizado para velocidad en video real
         self.model = YOLO('yolov8n.pt')  # Modelo nano para máxima velocidad
@@ -173,7 +182,9 @@ class VisionEngine:
 
             # Dibujar interfaz
             self._draw_interface(frame, x_roi, y_roi, w_roi, h_roi)
-            cv2.imshow('MSQ Engine', frame)
+            display_frame = self._fit_frame_to_screen(frame)
+            cv2.resizeWindow(self.window_name, display_frame.shape[1], display_frame.shape[0])
+            cv2.imshow(self.window_name, display_frame)
 
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
@@ -204,6 +215,43 @@ class VisionEngine:
                     cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
         cv2.putText(frame, f"FPS: {self.fps}", (20, 75), 
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+
+    def _get_screen_size(self) -> Tuple[int, int]:
+        """
+        Devuelve tamano del monitor principal con fallback seguro.
+        """
+        try:
+            user32 = ctypes.windll.user32
+            user32.SetProcessDPIAware()
+            return user32.GetSystemMetrics(0), user32.GetSystemMetrics(1)
+        except Exception:
+            return 1366, 768
+
+    def _fit_frame_to_screen(self, frame: np.ndarray) -> np.ndarray:
+        """
+        Ajusta el frame al monitor manteniendo relacion de aspecto.
+        """
+        h, w = frame.shape[:2]
+        max_w = max(320, self.screen_width - self.window_margin)
+        max_h = max(240, self.screen_height - self.window_margin)
+        min_w = int(self.screen_width * self.window_scale_min)
+        min_h = int(self.screen_height * self.window_scale_min)
+
+        # Escala objetivo para que el visor no se abra pequeno.
+        fit_scale = min(max_w / w, max_h / h)
+        min_scale = min_w / w if w < min_w else 0.0
+        min_scale_h = min_h / h if h < min_h else 0.0
+
+        scale = max(fit_scale if fit_scale < 1.0 else 1.0, min_scale, min_scale_h)
+        scale = min(scale, fit_scale)
+
+        if abs(scale - 1.0) < 0.01:
+            return frame
+
+        new_w = int(w * scale)
+        new_h = int(h * scale)
+        interpolation = cv2.INTER_LINEAR if scale > 1.0 else cv2.INTER_AREA
+        return cv2.resize(frame, (new_w, new_h), interpolation=interpolation)
 
     def _terminate(self) -> None:
         """
