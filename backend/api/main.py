@@ -1,12 +1,9 @@
-import sys
-import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-
 from fastapi import FastAPI
-from api.get_endpoints import router as get_router
-from api.post_endpoints import router as post_router
-from api.video_endpoints import router as video_router
-from api.database import init_db
+
+from .database import init_db
+from .get_endpoints import router as get_router
+from .post_endpoints import router as post_router
+from .video_endpoints import router as video_router
 
 # Inicializar la base de datos
 init_db()

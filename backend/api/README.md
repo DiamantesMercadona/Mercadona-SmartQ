@@ -13,7 +13,13 @@ Esta API proporciona acceso al estado de las colas de Mercadona desde una base d
 ## Instalación
 
 1. Instalar dependencias: `pip install -r requirements.txt`
-2. Ejecutar la API: `python api/main.py`
+2. Ejecutar la API desde la raiz del proyecto: `python -m backend.api.main`
+
+Tambien puedes arrancarla con Uvicorn desde la raiz del proyecto:
+
+```bash
+uvicorn backend.api.main:app --reload
+```
 
 La API estará disponible en `http://localhost:8000`.
 
