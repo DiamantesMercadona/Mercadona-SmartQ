@@ -1,8 +1,9 @@
-from vision_engine import MSQEngine
+from vision_engine import VisionEngine
 
 def main():
-    # Inicia el motor con la configuración predeterminada (webcam local)
-    engine = MSQEngine(source=0)
+
+    # Instancia y ejecuta el motor de visión
+    engine = VisionEngine()
     engine.process()
 
 if __name__ == "__main__":
