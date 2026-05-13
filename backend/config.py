@@ -1,9 +1,13 @@
 CONFIG = {
     # Configuración de Entorno y Hardware
     "APP": {
-        "mode": "DEBUG",                # "DEBUG" o "PRODUCTION"
-        "source_index": 0,              # ID de la cámara (Webcam = 0)
-        "yolo_model": "yolov8n.pt",     # Modelo de IA
+        "mode": "DEBUG",                    # "DEBUG" o "PRODUCTION"
+        "input_source_type": "webcam",      # "webcam", "video" o "image"
+        "source_index": 0,                  # ID de la cámara (Webcam = 0)
+        "default_image": "backend/resources/test_photo.jpg",        # Imagen por defecto para pruebas
+        "default_video": "backend/resources/walking_demo.mp4",      # Video de prueba por defecto
+        "default_source": "backend/resources/walking_demo.mp4",     # Fuente por defecto si se usa un archivo
+        "yolo_model": "yolov8n.pt",                                 # Modelo YOLO original para detección de personas
     },
 
     # Infraestructura y Persistencia
@@ -19,6 +23,11 @@ CONFIG = {
     # Parámetros del Motor de Visión
     "VISION": {
         "cluster_radius_px": 120,       # Radio DBSCAN para agrupar personas, en píxeles
+        "roi_columns": 3,               # Columnas de áreas ROI
+        "roi_rows": 2,                  # Filas de áreas ROI (3x2 = 6 áreas)
+        "roi_margin_x": 40,             # Margen horizontal de las áreas ROI
+        "roi_margin_top": 120,          # Margen superior de las áreas ROI
+        "roi_margin_bottom": 40,        # Margen inferior de las áreas ROI
     },
 
     # Lógica de Negocio y Algoritmo de Decisión
