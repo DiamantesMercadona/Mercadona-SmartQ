@@ -1,7 +1,7 @@
 <template>
   <div>
     <h1>Login</h1>
-    <form @submit.prevent="$router.push('/simulacion')">
+    <form @submit.prevent="$router.push('/menu')">
       <input type="text" placeholder="Usuario" />
       <input type="password" placeholder="Contraseña" />
       <button type="submit">Entrar</button>

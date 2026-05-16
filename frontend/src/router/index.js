@@ -14,6 +14,25 @@ const router = createRouter({
       name: 'login',
       component: () => import('../views/LoginView.vue'),
     },
+    {
+      path: '/menu',
+      name: 'menu',
+      component: () => import('../views/MenuView.vue'),
+    },
+    {
+      path: '/simulacion',
+      name: 'simulacion',
+      component: () => import('../views/SimulacionView.vue'),
+    },
+    {
+      path: '/gestion-empleados',
+      name: 'gestion-empleados',
+      component: () => import('../views/GestionEmpleadosView.vue'),
+    },
+    {
+      path: '/gestion-empleada',
+      redirect: { name: 'gestion-empleados' },
+    },
   ],
 })
 
