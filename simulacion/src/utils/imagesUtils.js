@@ -13,9 +13,6 @@ const facesArray = [
   '60b26de3e6c75800045089a2.png',
   '60b26f18e6c75800045089a4.png',
   '60b270ffe6c75800045089a5.png',
-]
-
-const facesArray2 = [
   'alvaro.png',
   'alvaro2.png',
   // "jose.png",
@@ -33,8 +30,8 @@ function getRandomFace() {
 }
 
 function getFacesRandomDependiente() {
-  const randomIndex = Math.floor(Math.random() * facesArray2.length)
-  return facesImgPath + facesArray2[randomIndex]
+  const randomIndex = Math.floor(Math.random() * facesArray.length)
+  return facesImgPath + facesArray[randomIndex]
 }
 
 function getRandomCarrito() {

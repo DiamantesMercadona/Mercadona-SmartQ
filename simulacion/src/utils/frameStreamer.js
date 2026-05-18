@@ -1,8 +1,11 @@
-const URL = 'ws://localhost:8000/ws'
+function getWsUrl() {
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  return `${protocol}//${window.location.host}${import.meta.env.VITE_API_PREFIX || '/api/v1'}/ws/video`
+}
 
 class FrameStreamer {
   constructor() {
-    this.wsUrl = URL
+    this.wsUrl = getWsUrl()
     this.socket = null
     this.isStreaming = false
     this.streamInterval = null

@@ -12,6 +12,11 @@ const router = createRouter({
       name: 'simulacion',
       component: () => import('../views/SimulacionView.vue'),
     },
+    {
+      path: '/backendTest',
+      name: 'backendTest',
+      component: () => import('../views/BackendTestView.vue'),
+    },
   ],
 })
 
