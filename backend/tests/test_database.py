@@ -84,14 +84,14 @@ class TestDatabaseMSQ(unittest.TestCase):
     # --- 4. EMPLEADOS ---
     def test_empleados(self):
 
-        emp_id = self.db.crear_empleado(nombre="Ana", apellidos="García", pulsera_id="p-123")
+        emp_id = self.db.crear_empleado(nombre="Ana", apellidos="García", id_pulsera="p-123")
         self.assertIsNotNone(emp_id)
         
         # Obtener
         emp = self.db.obtener_empleado(emp_id)
         self.assertIsNotNone(emp)
         self.assertEqual(emp["nombre"], "Ana")
-        self.assertEqual(emp["pulsera_id"], "p-123")
+        self.assertEqual(emp["id_pulsera"], "p-123")
         self.assertTrue(emp["activo"]) # Por defecto
         
         # Actualizar booleanos

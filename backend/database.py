@@ -145,7 +145,7 @@ class DatabaseMSQ:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 nombre TEXT NOT NULL,
                 apellidos TEXT NOT NULL,
-                pulsera_id TEXT UNIQUE,
+                id_pulsera TEXT UNIQUE,
                 activo INTEGER NOT NULL DEFAULT 1,
                 creado_en TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 actualizado_en TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -541,19 +541,19 @@ class DatabaseMSQ:
     # ------------------------------------------------------------------
 
     # Método para crear un nuevo empleado en la base de datos, con nombre, apellidos y pulsera IoT opcionalmente asociada.
-    def crear_empleado(self, nombre: str, apellidos: str, pulsera_id: Optional[str] = None) -> int:
+    def crear_empleado(self, nombre: str, apellidos: str, id_pulsera: Optional[str] = None) -> int:
         """Crea un nuevo registro de empleado.
 
         Args:
             nombre: Nombre del empleado.
             apellidos: Apellidos del empleado.
-            pulsera_id: ID único de la pulsera IoT asociada (opcional, debe ser único).
+            id_pulsera: ID único de la pulsera IoT asociada (opcional, debe ser único).
 
         Returns:
             ID del empleado creado.
 
         Raises:
-            sqlite3.IntegrityError: Si pulsera_id ya existe en otro empleado.
+            sqlite3.IntegrityError: Si id_pulsera ya existe en otro empleado.
 
         Example:
             with DatabaseMSQ() as db:
@@ -562,10 +562,10 @@ class DatabaseMSQ:
         """
         self.cursor.execute(
             """
-            INSERT INTO empleados (nombre, apellidos, pulsera_id, activo, creado_en, actualizado_en)
+            INSERT INTO empleados (nombre, apellidos, id_pulsera, activo, creado_en, actualizado_en)
             VALUES (?, ?, ?, 1, ?, ?)
             """,
-            (nombre, apellidos, pulsera_id, self._now_iso(), self._now_iso()),
+            (nombre, apellidos, id_pulsera, self._now_iso(), self._now_iso()),
         )
         self.conn.commit()
         return int(self.cursor.lastrowid)
@@ -587,7 +587,7 @@ class DatabaseMSQ:
                 for emp in activos:
                     print(f"{emp['nombre']} {emp['apellidos']}")
         """
-        query = "SELECT id, nombre, apellidos, pulsera_id, activo, creado_en, actualizado_en FROM empleados"
+        query = "SELECT id, nombre, apellidos, id_pulsera, activo, creado_en, actualizado_en FROM empleados"
         parametros: List[Any] = []
         if activos:
             query += " WHERE activo = ?"
@@ -596,7 +596,7 @@ class DatabaseMSQ:
 
         self.cursor.execute(query, parametros)
         rows = self.cursor.fetchall()
-        columnas = ["id", "nombre", "apellidos", "pulsera_id", "activo", "creado_en", "actualizado_en"]
+        columnas = ["id", "nombre", "apellidos", "id_pulsera", "activo", "creado_en", "actualizado_en"]
         
         result = []
         for row in rows:
@@ -620,18 +620,18 @@ class DatabaseMSQ:
                 emp = db.obtener_empleado(1)
                 if emp:
                     print(f"Empleado: {emp['nombre']} {emp['apellidos']}")
-                    print(f"Pulsera: {emp['pulsera_id']}")
+                    print(f"Pulsera: {emp['id_pulsera']}")
                     print(f"Activo: {bool(emp['activo'])}")
         """
         self.cursor.execute(
-            "SELECT id, nombre, apellidos, pulsera_id, activo, creado_en, actualizado_en FROM empleados WHERE id = ?",
+            "SELECT id, nombre, apellidos, id_pulsera, activo, creado_en, actualizado_en FROM empleados WHERE id = ?",
             (id_empleado,),
         )
         row = self.cursor.fetchone()
         if row is None:
             return None
         
-        item = self._row_to_dict(row, ["id", "nombre", "apellidos", "pulsera_id", "activo", "creado_en", "actualizado_en"])
+        item = self._row_to_dict(row, ["id", "nombre", "apellidos", "id_pulsera", "activo", "creado_en", "actualizado_en"])
         item["activo"] = bool(item["activo"])
         return item
 
@@ -641,7 +641,7 @@ class DatabaseMSQ:
         id_empleado: int,
         nombre: Optional[str] = None,
         apellidos: Optional[str] = None,
-        pulsera_id: Optional[str] = None,
+        id_pulsera: Optional[str] = None,
         activo: Optional[bool] = None,
     ) -> bool:
         """Actualiza los datos de un empleado existente.
@@ -653,7 +653,7 @@ class DatabaseMSQ:
             id_empleado: ID del empleado a actualizar.
             nombre: Nuevo nombre (opcional).
             apellidos: Nuevos apellidos (opcional).
-            pulsera_id: Nuevo ID de pulsera (opcional).
+            id_pulsera: Nuevo ID de pulsera (opcional).
             activo: Nuevo estado (True=activo, False=inactivo, opcional).
 
         Returns:
@@ -664,7 +664,7 @@ class DatabaseMSQ:
                 actualizado = db.actualizar_empleado(
                     1,
                     nombre="Juan",
-                    pulsera_id="pulsera-002"
+                    id_pulsera="pulsera-002"
                 )
                 if actualizado:
                     print("Empleado actualizado")
@@ -678,9 +678,9 @@ class DatabaseMSQ:
         if apellidos is not None:
             campos.append("apellidos = ?")
             parametros.append(apellidos)
-        if pulsera_id is not None:
-            campos.append("pulsera_id = ?")
-            parametros.append(pulsera_id)
+        if id_pulsera is not None:
+            campos.append("id_pulsera = ?")
+            parametros.append(id_pulsera)
         if activo is not None:
             campos.append("activo = ?")
             parametros.append(1 if activo else 0)

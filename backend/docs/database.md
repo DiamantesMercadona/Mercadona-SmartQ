@@ -81,7 +81,7 @@ La tabla se usa para registrar puntos temporales y consultarlos con filtros por 
 Registro de empleados del centro.
 
 ```
-id, nombre, apellidos, pulsera_id, activo, creado_en, actualizado_en
+id, nombre, apellidos, id_pulsera, activo, creado_en, actualizado_en
 ```
 
 Ejemplo de empleado:
@@ -90,7 +90,7 @@ Ejemplo de empleado:
     "id": 1,
     "nombre": "Juan",
     "apellidos": "García López",
-    "pulsera_id": "001",
+    "id_pulsera": "001",
     "activo": true,
     "creado_en": "2026-05-18T10:00:00Z",
     "actualizado_en": "2026-05-18T10:30:00Z"
@@ -300,7 +300,7 @@ Tabla principal de datos sobre el personal, sus IDs, sus correspondientes dispos
 Registra en empleado en la base de datos devolviendo la clave única `id` del empleado nuevo.
 ```python
 with DatabaseMSQ() as db:
-    emp_id = db.crear_empleado(nombre="Juan", apellidos="García López", pulsera_id="001")
+    emp_id = db.crear_empleado(nombre="Juan", apellidos="García López", id_pulsera="001")
 ```
 
 **`listar_empleados`**:
