@@ -9,11 +9,19 @@
 ### 1. Instalar las dependencias
 
 ```bash
-py -m pip install -r requirements.txt
+python -m pip install -r requirements.txt
 ```
 
 ### 2. Ejecutar el punto de entrada
 
 ```bash
-py main.py
+python main.py
+```
+
+## Pruebas (Tests)
+
+Para ejecutar todos los tests unitarios del backend, ejecutar el siguiente comando:
+
+```bash
+python -m unittest discover tests
 ```
