@@ -10,9 +10,9 @@
     <label>
       Cámara:
       <select v-model="cameraMode">
-        <option value="libre">Libre</option>
-        <option value="frontal">Frontal</option>
-        <option value="cenital">Cenital</option>
+        <option v-for="key in Object.keys(POSICIONES_CAMARA)" :key="key" :value="key">
+          {{ key.charAt(0).toUpperCase() + key.slice(1) }}
+        </option>
       </select>
     </label>
     <label class="toggle">
@@ -49,9 +49,16 @@
 
   <!-- Free camera position panel -->
   <div v-if="mostrarReferenciasEspaciales && cameraMode === 'libre'" class="camera-pos-panel">
+    <span class="camera-pos-label">Posición</span>
     <code class="camera-pos-coords"
       >new THREE.Vector3({{ camera.position.x.toFixed(2) }}, {{ camera.position.y.toFixed(2) }},
       {{ camera.position.z.toFixed(2) }})</code
+    >
+    <span class="camera-pos-label">Mirando hacia</span>
+    <code class="camera-pos-coords"
+      >new THREE.Vector3({{ camControls?.controls?.target?.x.toFixed(2) }},
+      {{ camControls?.controls?.target?.y.toFixed(2) }},
+      {{ camControls?.controls?.target?.z.toFixed(2) }})</code
     >
     <button
       class="btn-copy-coords"
@@ -80,7 +87,8 @@ import {
   tickAnimations,
   simulationSpeed,
 } from '@/composables/useCajasScene.js'
-import { initCameraControls, POSICIONES_CAMARA } from '@/composables/useCameraControls.js'
+import { initCameraControls } from '@/composables/useCameraControls.js'
+import { POSICIONES_CAMARA } from '@/composables/camarasConfig.js'
 import { useReferenciasEspaciales } from '@/composables/useReferenciasEspaciales.js'
 
 const SUELO_LARGO = 40
@@ -124,7 +132,7 @@ async function init() {
     0.1,
     100,
   )
-  camera.position.copy(POSICIONES_CAMARA[cameraMode.value])
+  camera.position.copy(POSICIONES_CAMARA[cameraMode.value].position)
 
   renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true })
   renderer.setSize(container.value.clientWidth, container.value.clientHeight)
@@ -184,8 +192,12 @@ function onResize() {
 
 function copiarPosicionCamara() {
   const { x, y, z } = camera.position
+  const t = camControls.controls.target
   navigator.clipboard.writeText(
-    `new THREE.Vector3(${x.toFixed(2)}, ${y.toFixed(2)}, ${z.toFixed(2)})`,
+    `newCameraPos: {\n` +
+      `    position: new THREE.Vector3(${x.toFixed(2)}, ${y.toFixed(2)}, ${z.toFixed(2)}),\n` +
+      `    lookAt: new THREE.Vector3(${t.x.toFixed(2)}, ${t.y.toFixed(2)}, ${t.z.toFixed(2)}),\n` +
+      `  },`,
   )
   posicionCopiada.value = true
   setTimeout(() => (posicionCopiada.value = false), 1500)

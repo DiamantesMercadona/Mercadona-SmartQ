@@ -1,2 +1,4 @@
-- Probar nuevo render con el motor de deteccion de personas
-- Integracion con el backebd
+- rotar cajas 90º antihorario
+- añadir mas diversidad de personas (colores de ropa)
+- hacer que las imagenes que aparezcan juntas no sean de colores similares
+- Integracion con el backend
