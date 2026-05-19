@@ -2,7 +2,8 @@ import sqlite3
 import time
 import pandas as pd
 import math
-from config import CONFIG  
+from config import CONFIG
+from database import DatabaseMSQ
 
 class ProcesadorDecisionesMSQ:
     def __init__(self):
@@ -36,26 +37,38 @@ class ProcesadorDecisionesMSQ:
         self.alfa_aprendizaje = 0.2
 
     def obtener_datos_camara(self):
-        """Lee directamente los Grupos con Cesta y Grupos con Carro desde la BD."""
+        """Lee las instantáneas desde el gestor centralizado DatabaseMSQ."""
         try:
-            conn = sqlite3.connect(self.db_path)
-            # Ahora leemos las nuevas columnas
-            query = "SELECT grupos_cesta, grupos_carro FROM registro_colas ORDER BY id DESC LIMIT 3"
-            df = pd.read_sql_query(query, conn)
-            conn.close()
+            # Usamos el Context Manager (with) que habéis programado en la clase
+            with DatabaseMSQ() as db:
+                ultimas_instantaneas = db.obtener_instantaneas(limite=3)
             
-            if df.empty:
+            if not ultimas_instantaneas:
                 return 0, 0, 0
                 
-            # Hacemos la media de los últimos 3 registros y redondeamos
-            grupos_cesta = int(df['grupos_cesta'].mean())
-            grupos_carro = int(df['grupos_carro'].mean())
+            total_cestas = 0
+            total_carros = 0
+            
+            # Recorremos las últimas 3 fotos para hacer la media (antirrebote visual)
+            for snapshot in ultimas_instantaneas:
+                estado_cajas = snapshot["estado_cajas"]
+                
+                # estado_cajas es un diccionario: {"1": ["sinCarro"], "2": ["conCarro", "sinCarro"]}
+                for cola in estado_cajas.values():
+                    # Contamos cuántos de cada tipo hay en esta foto
+                    total_cestas += cola.count("sinCarro")
+                    total_carros += cola.count("conCarro")
+            
+            # Calculamos la media de las 3 fotos y convertimos a número entero
+            num_fotos = len(ultimas_instantaneas)
+            grupos_cesta = int(total_cestas / num_fotos)
+            grupos_carro = int(total_carros / num_fotos)
             grupos_totales = grupos_cesta + grupos_carro
             
             return grupos_cesta, grupos_carro, grupos_totales
             
         except Exception as e:
-            # Silenciamos el error si la tabla aún no está creada
+            print(f"[Error de Lectura DB]: {e}")
             return 0, 0, 0
         
     def aprender_de_tiempos_reales(self):
