@@ -12,7 +12,7 @@ router = APIRouter()
 # ------------------------------
 
 class QueueUpdate(BaseModel):
-    length: int
+    length: int = 0
     status: str
 
 
@@ -32,13 +32,17 @@ class DisplayEvent(BaseModel):
 # ------------------------------
 
 @router.post("/queues/{queue_id}")
-async def update_queue_endpoint(queue_id: int, update: QueueUpdate):
+async def update_queue_endpoint(queue_id: str, update: QueueUpdate):
     """
     Actualizar el estado de una cola específica.
     """
     try:
-        update_queue(queue_id, update.length, update.status)
+        updated = update_queue(queue_id, update.length, update.status)
+        if not updated:
+            raise HTTPException(status_code=404, detail="Cola no encontrada")
         return {"message": "Cola actualizada correctamente"}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

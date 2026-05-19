@@ -15,13 +15,13 @@ async def get_all_queues():
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/queues/{queue_id}")
-async def get_queue(queue_id: int):
+async def get_queue(queue_id: str):
     """
     Obtener el estado de una cola específica por ID.
     """
     try:
         queues = get_queues()
-        queue = next((q for q in queues if q["id"] == queue_id), None)
+        queue = next((q for q in queues if str(q["id"]) == str(queue_id)), None)
         if not queue:
             raise HTTPException(status_code=404, detail="Cola no encontrada")
         return queue

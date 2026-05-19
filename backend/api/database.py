@@ -1,37 +1,50 @@
-import sqlite3
-from typing import List, Dict
+from pathlib import Path
+import sys
+from typing import Any, Dict, List
 
-DATABASE_PATH = "queues.db"
+BACKEND_DIR = Path(__file__).resolve().parents[1]
+if str(BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(BACKEND_DIR))
 
-def init_db():
-    conn = sqlite3.connect(DATABASE_PATH)
-    cursor = conn.cursor()
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS queues (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            length INTEGER NOT NULL,
-            status TEXT NOT NULL
-        )
-    ''')
-    # Insertar datos de ejemplo
-    cursor.execute("INSERT OR IGNORE INTO queues (id, name, length, status) VALUES (1, 'Caja 1', 5, 'activa')")
-    cursor.execute("INSERT OR IGNORE INTO queues (id, name, length, status) VALUES (2, 'Caja 2', 3, 'activa')")
-    cursor.execute("INSERT OR IGNORE INTO queues (id, name, length, status) VALUES (3, 'Caja 3', 0, 'cerrada')")
-    conn.commit()
-    conn.close()
+from database import DatabaseMSQ
 
-def get_queues() -> List[Dict]:
-    conn = sqlite3.connect(DATABASE_PATH)
-    cursor = conn.cursor()
-    cursor.execute("SELECT id, name, length, status FROM queues")
-    rows = cursor.fetchall()
-    conn.close()
-    return [{"id": row[0], "name": row[1], "length": row[2], "status": row[3]} for row in rows]
 
-def update_queue(queue_id: int, length: int, status: str):
-    conn = sqlite3.connect(DATABASE_PATH)
-    cursor = conn.cursor()
-    cursor.execute("UPDATE queues SET length = ?, status = ? WHERE id = ?", (length, status, queue_id))
-    conn.commit()
-    conn.close()
+def init_db() -> None:
+    with DatabaseMSQ():
+        pass
+
+
+def _latest_queue_lengths(db: DatabaseMSQ) -> Dict[str, int]:
+    snapshots = db.obtener_instantaneas(limite=1)
+    if not snapshots:
+        return {}
+
+    estado_cajas = snapshots[0].get("estado_cajas") or {}
+    return {
+        str(queue_id): len(groups) if isinstance(groups, list) else 0
+        for queue_id, groups in estado_cajas.items()
+    }
+
+
+def _queue_from_caja(caja: Dict[str, Any], lengths: Dict[str, int]) -> Dict[str, Any]:
+    queue_id = str(caja["id"])
+    return {
+        "id": queue_id,
+        "name": f"Caja {queue_id}",
+        "length": lengths.get(queue_id, 0),
+        "status": caja["estado"],
+        "id_empleado": caja.get("id_empleado"),
+        "actualizado_en": caja.get("actualizado_en"),
+    }
+
+
+def get_queues() -> List[Dict[str, Any]]:
+    with DatabaseMSQ() as db:
+        lengths = _latest_queue_lengths(db)
+        return [_queue_from_caja(caja, lengths) for caja in db.obtener_cajas()]
+
+
+def update_queue(queue_id: int | str, length: int, status: str) -> bool:
+    del length
+    with DatabaseMSQ() as db:
+        return db.actualizar_caja(id=str(queue_id), estado=status)

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Body, HTTPException, Response, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, Response, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 from datetime import datetime, timezone
 from typing import Any
