@@ -1,0 +1,202 @@
+.scene {
+  width: 100%;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.controls-panel {
+  position: fixed;
+  top: 18px;
+  left: 18px;
+  background: rgba(15, 23, 42, 0.8);
+  color: #f1f5f9;
+  padding: 12px 16px;
+  border-radius: 12px;
+  z-index: 60;
+  pointer-events: auto;
+  display: flex;
+  flex-wrap: wrap;
+  max-width: calc(100vw - 220px);
+  gap: 12px;
+  align-items: center;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  box-shadow: 0 10px 34px rgba(2, 6, 23, 0.62);
+  backdrop-filter: blur(6px) saturate(120%);
+}
+
+.controls-panel select {
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02));
+  color: #f8fafc;
+  min-width: 140px;
+  cursor: pointer;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  box-shadow: inset 0 -2px 6px rgba(2, 6, 23, 0.2);
+}
+
+.controls-panel select:focus {
+  outline: 2px solid rgba(99, 102, 241, 0.18);
+  outline-offset: 2px;
+}
+
+.controls-panel select option {
+  background: rgba(15, 23, 42, 0.98);
+  color: #f8fafc;
+  font-weight: 600;
+}
+
+.controls-panel label {
+  color: inherit;
+}
+
+.controls-panel .toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-download {
+  padding: 8px 14px;
+  background: linear-gradient(90deg, #6d8cff, #7b61ff);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.12s ease;
+  box-shadow: 0 6px 18px rgba(79, 70, 229, 0.22);
+}
+
+.btn-download:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 26px rgba(79, 70, 229, 0.26);
+}
+
+.btn-download:active {
+  transform: translateY(0);
+}
+
+.btn-download.is-recording {
+  background: linear-gradient(90deg, #ef4444, #dc2626);
+  box-shadow: 0 6px 18px rgba(239, 68, 68, 0.3);
+  animation: recording-pulse 1.2s ease-in-out infinite;
+}
+
+.recording-time {
+  font-variant-numeric: tabular-nums;
+  color: #f87171;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.5px;
+}
+
+@keyframes recording-pulse {
+  0%,
+  100% {
+    box-shadow: 0 6px 18px rgba(239, 68, 68, 0.3);
+  }
+  50% {
+    box-shadow: 0 6px 28px rgba(239, 68, 68, 0.65);
+  }
+}
+
+.camera-pos-panel {
+  position: fixed;
+  top: 80px;
+  left: 18px;
+  background: rgba(15, 23, 42, 0.82);
+  color: #e0e7ff;
+  border-radius: 10px;
+  z-index: 60;
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  box-shadow: 0 4px 16px rgba(2, 6, 23, 0.5);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  backdrop-filter: blur(6px);
+}
+
+.camera-pos-coords {
+  font-family: 'Monaco', 'Courier New', monospace;
+  font-size: 12px;
+  color: #e0e7ff;
+  white-space: nowrap;
+}
+
+.btn-copy-coords {
+  padding: 4px 10px;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.9), rgba(99, 102, 241, 0.92));
+  color: #f8fafc;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+  transition: background 0.2s ease;
+  white-space: nowrap;
+}
+
+.btn-copy-coords.copied {
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.9), rgba(16, 185, 129, 0.9));
+}
+
+.status-badge {
+  padding: 6px 14px;
+  border-radius: 50px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.status-badge.open {
+  background: rgba(46, 204, 113, 0.9);
+  color: white;
+}
+
+.status-badge.closed {
+  background: rgba(231, 76, 60, 0.9);
+  color: white;
+}
+
+.tooltip {
+  position: fixed;
+  pointer-events: none;
+}
+
+.tooltip-card {
+  background: rgba(2, 6, 23, 0.95);
+  color: #f8fafc;
+  border-radius: 12px;
+  padding: 8px 14px;
+  box-shadow: 0 10px 26px rgba(2, 6, 23, 0.66);
+  display: inline-block;
+  pointer-events: none;
+  font-weight: 800;
+  font-size: 15px;
+}
+
+.tooltip-header {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.tooltip-content {
+  margin-top: 6px;
+  font-weight: 800;
+  color: #f8fafc;
+  font-size: 14px;
+}
