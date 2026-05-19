@@ -114,7 +114,7 @@ const recordingElapsedLabel = computed(() => {
   return `Grabando ${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
 })
 
-function init() {
+async function init() {
   scene = new THREE.Scene()
   scene.background = crearFondoEscena()
 
@@ -142,7 +142,7 @@ function init() {
   suelo.receiveShadow = true
   scene.add(suelo)
 
-  crearParedes(scene, SUELO_LARGO, SUELO_ANCHO)
+  await crearParedes(scene, SUELO_LARGO, SUELO_ANCHO)
 
   if (mostrarReferenciasEspaciales.value) refEspaciales.crear(scene)
 

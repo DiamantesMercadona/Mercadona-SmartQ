@@ -34,7 +34,14 @@ function texturaParedLateral() {
   return new THREE.CanvasTexture(c)
 }
 
-function texturaParedFondo(canvasW, canvasH) {
+async function texturaParedFondo(canvasW, canvasH) {
+  const logo = await new Promise((resolve) => {
+    const img = new Image()
+    img.onload = () => resolve(img)
+    img.onerror = () => resolve(null)
+    img.src = '/assets/logo_mercadona.png'
+  })
+
   const c = document.createElement('canvas')
   c.width = canvasW
   c.height = canvasH
@@ -70,13 +77,26 @@ function texturaParedFondo(canvasW, canvasH) {
   ctx.fillRect(0, bY, c.width, 5)
   ctx.fillRect(0, bY + bH - 5, c.width, 5)
 
-  // MERCADONA text
+  // Logo + MERCADONA text centered together
   const fontSize = Math.round(c.height * 0.25)
-  ctx.fillStyle = '#ffffff'
   ctx.font = `bold ${fontSize}px Arial, Helvetica, sans-serif`
-  ctx.textAlign = 'center'
+  const textWidth = ctx.measureText('MERCADONA').width
+  const bandCenterY = bY + bH / 2
+
+  const logoH = logo ? Math.round(bH * 0.65) : 0
+  const logoW = logo ? Math.round(logo.width * (logoH / logo.height)) : 0
+  const gap = logo ? Math.round(fontSize * 0.35) : 0
+  const totalW = logoW + gap + textWidth
+  const startX = (c.width - totalW) / 2
+
+  if (logo) {
+    ctx.drawImage(logo, startX, bandCenterY - logoH / 2, logoW, logoH)
+  }
+
+  ctx.fillStyle = '#ffffff'
+  ctx.textAlign = 'left'
   ctx.textBaseline = 'middle'
-  ctx.fillText('MERCADONA', c.width / 2, bY + bH / 2)
+  ctx.fillText('MERCADONA', startX + logoW + gap, bandCenterY)
 
   // Green skirting board
   ctx.fillStyle = MERCADONA_GREEN
@@ -85,8 +105,8 @@ function texturaParedFondo(canvasW, canvasH) {
   return new THREE.CanvasTexture(c)
 }
 
-export function crearParedes(scene, sueloLargo, sueloAncho) {
-  const texFondo = texturaParedFondo(2048, 512)
+export async function crearParedes(scene, sueloLargo, sueloAncho) {
+  const texFondo = await texturaParedFondo(2048, 512)
   const matFondo = new THREE.MeshStandardMaterial({
     map: texFondo,
     roughness: 0.82,
