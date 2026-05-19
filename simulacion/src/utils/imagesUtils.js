@@ -20,7 +20,19 @@ const facesArray = [
 
 const carrosArray = ['c1.png', 'c2.png', 'c3.png', 'c4.png', 'c5.png', 'c6.png']
 
-const personasArray = ['p1.png', 'p2.png', 'p3.png', 'p4.png', 'p5.png', 'p6.png', 'p7.png']
+const personasArray = [
+  'p1.png',
+  'p2.png',
+  'p3.png',
+  'p4.png',
+  'p5.png',
+  'p6.png',
+  'p7.png',
+  'p8.png',
+  'p9.png',
+  'p10.png',
+  'p11.png',
+]
 
 let personaPrevIndex = -1
 
