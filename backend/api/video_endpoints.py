@@ -1,4 +1,7 @@
 from fastapi import APIRouter, Body, HTTPException, Response, WebSocket, WebSocketDisconnect
+from pydantic import BaseModel, Field
+from datetime import datetime, timezone
+from typing import Any
 
 from .redis_client import (
     get_latest_video_payload,
@@ -6,10 +9,15 @@ from .redis_client import (
     ping_redis,
     publish_video_payload,
     subscribe_video_payloads,
+    subscribe_bytes,
 )
 
 router = APIRouter()
 
+
+# ---------------------------------------------------------
+# MODELO DE EVENTO DE VIDEO
+# ---------------------------------------------------------
 
 class VideoEvent(BaseModel):
     camera_id: str = Field(default="simulador-3d", examples=["simulador-3d"])
@@ -19,6 +27,10 @@ class VideoEvent(BaseModel):
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     metadata: dict[str, Any] = Field(default_factory=dict)
 
+
+# ---------------------------------------------------------
+# REDIS HEALTH
+# ---------------------------------------------------------
 
 @router.get("/redis/health")
 async def redis_health():
@@ -39,14 +51,14 @@ async def redis_health():
 @router.post("/video/events", status_code=202)
 async def publish_video_event(event: VideoEvent):
     """
-    Recibe una medicion/frame del simulador y lo publica en Redis Pub/Sub.
+    Recibe una medición/frame del simulador y lo publica en Redis Pub/Sub.
     """
     payload = event.model_dump(mode="json")
     payload_bytes = event.model_dump_json().encode("utf-8")
     channel = get_video_channel()
 
     if not payload:
-        raise HTTPException(status_code=400, detail="El payload binario no puede estar vacio")
+        raise HTTPException(status_code=400, detail="El payload binario no puede estar vacío")
 
     try:
         subscribers = await publish_video_payload(payload)
@@ -57,7 +69,7 @@ async def publish_video_event(event: VideoEvent):
         "message": "Evento publicado en Redis",
         "channel": channel,
         "subscribers": subscribers,
-        "bytes": len(payload),
+        "bytes": len(payload_bytes),
     }
 
 
@@ -85,7 +97,7 @@ async def get_latest_video_event():
 @router.websocket("/ws/video")
 async def video_stream(websocket: WebSocket):
     """
-    WebSocket para recibir eventos continuos del simulador y reenviarlos a Redis.
+    WebSocket para recibir frames binarios y publicarlos en Redis.
     """
     await websocket.accept()
     channel = get_video_channel()
@@ -94,11 +106,11 @@ async def video_stream(websocket: WebSocket):
         while True:
             payload = await websocket.receive_bytes()
             subscribers = await publish_video_payload(payload)
+
             await websocket.send_bytes(
-                f"Evento publicado en Redis; channel={channel}; subscribers={subscribers}".encode(
-                    "utf-8"
-                )
+                f"Evento publicado en Redis; channel={channel}; subscribers={subscribers}".encode("utf-8")
             )
+
     except WebSocketDisconnect:
         return
     except RuntimeError:
@@ -113,11 +125,15 @@ async def video_stream(websocket: WebSocket):
 
 @router.websocket("/ws/video/events")
 async def video_events_stream(websocket: WebSocket):
+    """
+    WebSocket de salida para reenviar a clientes los eventos binarios publicados en Redis.
+    """
     await websocket.accept()
 
     try:
         async for payload in subscribe_video_payloads(include_latest=True):
             await websocket.send_bytes(payload)
+
     except WebSocketDisconnect:
         return
     except Exception as exc:
