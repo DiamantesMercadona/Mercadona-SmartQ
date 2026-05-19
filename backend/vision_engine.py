@@ -9,6 +9,11 @@ from scipy.cluster.hierarchy import fclusterdata
 import time
 import ctypes
 
+try:
+    from .database import DatabaseMSQ
+except ImportError:
+    from database import DatabaseMSQ
+
 class VisionEngine:
     """
     Motor de visión artificial para Mercadona SmartQ (MSQ).
@@ -59,34 +64,59 @@ class VisionEngine:
         self.fps_count = 0
         self.fps = 0
 
-        # Región de interés: (x_inicio, y_inicio, ancho, alto)
-        self.roi_coords = (200, 250, 200, 500)
-        self.count = 0
+        # Configuración de 6 ROIs (Regiones de Interés) para 6 cajas
+        # Calculamos la anchura dinámicamente con el frame
+        frame_w = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        if frame_w <= 0:
+            frame_w = 1280  # Valor por defecto
+            
+        # Margen izquierdo (200, como la original) y márgen derecho simétrico
+        left_margin = 200
+        right_margin = 200
+        available_w = frame_w - left_margin - right_margin
+        
+        # 6 cajas + 1 hueco en el medio = 7 espacios en total
+        margin_between = 10
+        roi_w = max(10, (available_w - (6 * margin_between)) // 7)
+        
+        self.rois = {}
+        self.counts = {}
+        
+        # Índices de las posiciones de las cajas (saltándonos el índice 3: hueco central)
+        posiciones = [0, 1, 2, 4, 5, 6]
+        
+        for i, pos_idx in enumerate(posiciones, 1):
+            caja_id = str(i)
+            x_roi = left_margin + pos_idx * (roi_w + margin_between)
+            self.rois[caja_id] = (x_roi, 250, roi_w, 500)
+            self.counts[caja_id] = 0
 
-        # Conexión a la base de datos
-        self.conn = sqlite3.connect("msq.db")
-        self.cursor = self.conn.cursor()
+        # Conexión a la base de datos (canonical schema)
+        self.db = DatabaseMSQ()
+        self.last_db_save_time = time.time()
 
-        # Crear tabla si no existe
-        self.cursor.execute("""
-            CREATE TABLE IF NOT EXISTS detecciones (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                timestamp TEXT NOT NULL,
-                personas_en_cola INTEGER NOT NULL,
-                caja_saturada INTEGER NOT NULL
-            );
-        """)
-        self.conn.commit()
+        # Asegurar que las 6 cajas existan en la tabla cajas
+        for caja_id in self.rois.keys():
+            if not self.db.obtener_caja(id=caja_id):
+                try:
+                    self.db.crear_caja(id=caja_id, estado="abierta")
+                    print(f"[VisionEngine] Caja '{caja_id}' registrada en la base de datos.")
+                except sqlite3.IntegrityError:
+                    pass
 
-    def guardar_evento(self, personas: int, saturada: int):
+    def guardar_evento(self, counts: dict):
         """
-        Guarda un evento de detección en la base de datos.
+        Guarda una instantánea con el estado de las 6 colas a través de DatabaseMSQ.
         """
-        self.cursor.execute("""
-            INSERT INTO detecciones (timestamp, personas_en_cola, caja_saturada)
-            VALUES (?, ?, ?)
-        """, (datetime.now().isoformat(), personas, saturada))
-        self.conn.commit()
+        # Mapeamos la detección cruda al esquema de instantaneas para cada caja
+        # Definimos cada persona/grupo detectado de momento como "sinCarro".
+        estado_cajas = {}
+        for caja_id, personas in counts.items():
+            estado_cajas[caja_id] = ["sinCarro"] * personas
+        
+        self.db.registrar_instantanea(
+            estado_cajas=estado_cajas
+        )
 
     def _separate_overlapping_boxes(self, boxes: List[Tuple[int, int, int, int]]) -> List[Tuple[int, int, int, int]]:
         """
@@ -157,31 +187,32 @@ class VisionEngine:
                 # Usar cajas del último frame procesado (suavizar)
                 person_boxes = self.last_person_boxes
 
-            current_count = 0
-            x_roi, y_roi, w_roi, h_roi = self.roi_coords
+            current_counts = {str(i): 0 for i in range(1, 7)}
 
             for (x1, y1, x2, y2) in person_boxes:
                 feet_x = int((x1 + x2) / 2)
                 feet_y = y2
 
-                is_in_queue = (x_roi < feet_x < x_roi + w_roi and 
-                               y_roi < feet_y < y_roi + h_roi)
+                in_any_roi = False
+                for caja_id, (x_roi, y_roi, w_roi, h_roi) in self.rois.items():
+                    if x_roi < feet_x < x_roi + w_roi and y_roi < feet_y < y_roi + h_roi:
+                        current_counts[caja_id] += 1
+                        in_any_roi = True
+                        break  # Una persona solo puede estar en una cola
 
-                color = (0, 255, 0) if is_in_queue else (200, 200, 200)
-                if is_in_queue:
-                    current_count += 1
-
+                color = (0, 255, 0) if in_any_roi else (200, 200, 200)
                 cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
 
-            self.count = current_count
-            caja_saturada = 1 if self.count >= 4 else 0
+            self.counts = current_counts
 
-            # Guardar en la base de datos (solo en frames procesados)
-            if self.frame_count % self.frame_skip == 0:
-                self.guardar_evento(self.count, caja_saturada)
+            # Guardar en la base de datos (cada 5 segundos)
+            current_time = time.time()
+            if current_time - self.last_db_save_time >= 5.0:
+                self.guardar_evento(self.counts)
+                self.last_db_save_time = current_time
 
             # Dibujar interfaz
-            self._draw_interface(frame, x_roi, y_roi, w_roi, h_roi)
+            self._draw_interface(frame)
             display_frame = self._fit_frame_to_screen(frame)
             cv2.resizeWindow(self.window_name, display_frame.shape[1], display_frame.shape[0])
             cv2.imshow(self.window_name, display_frame)
@@ -204,17 +235,21 @@ class VisionEngine:
 
         self._terminate()
 
-    def _draw_interface(self, frame: np.ndarray, x: int, y: int, w: int, h: int) -> None:
+    def _draw_interface(self, frame: np.ndarray) -> None:
         """
         Dibuja la interfaz de usuario sobre el frame.
         """
-        cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 2)
+        # Dibujar cada ROI y su contador
+        for caja_id, (x, y, w, h) in self.rois.items():
+            cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 2)
+            cv2.putText(frame, f"Caja {caja_id}: {self.counts[caja_id]}", (x, y - 10), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
 
-        cv2.rectangle(frame, (15, 10), (475, 80), (0, 0, 0), -1)
-        cv2.putText(frame, f"MSQ - Personas en cola: {self.count}", (20, 40), 
-                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-        cv2.putText(frame, f"FPS: {self.fps}", (20, 75), 
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+        # Panel superior agregado a todas las colas
+        cv2.rectangle(frame, (15, 10), (475, 45), (0, 0, 0), -1)
+        total_personas = sum(self.counts.values())
+        cv2.putText(frame, f"MSQ - Personas en colas: {total_personas} | FPS: {self.fps}", (20, 35), 
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
 
     def _get_screen_size(self) -> Tuple[int, int]:
         """
@@ -259,7 +294,7 @@ class VisionEngine:
         """
         self.cap.release()
         cv2.destroyAllWindows()
-        self.conn.close()
+        self.db.close()
 
 if __name__ == "__main__":
     engine = VisionEngine()
