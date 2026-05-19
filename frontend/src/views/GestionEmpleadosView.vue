@@ -2,20 +2,24 @@
 import { computed, reactive, ref } from 'vue'
 
 const employees = ref([
-  { id: 1, name: 'Laura', surname: 'Martinez Soto' },
-  { id: 2, name: 'Carlos', surname: 'Navarro Gil' },
-  { id: 3, name: 'Nuria', surname: 'Lopez Pardo' },
-  { id: 4, name: 'Hugo', surname: 'Ramirez Vega' },
-  { id: 5, name: 'Marta', surname: 'Serra Ruiz' },
-  { id: 6, name: 'Sergio', surname: 'Campos Mora' },
-  { id: 7, name: 'Aina', surname: 'Torres Vidal' },
-  { id: 8, name: 'Pau', surname: 'Ferrer Soler' },
+  { id: 1, name: 'Laura', surname: 'Martinez Soto', braceletId: 'P-001' },
+  { id: 2, name: 'Carlos', surname: 'Navarro Gil', braceletId: 'P-002' },
+  { id: 3, name: 'Nuria', surname: 'Lopez Pardo', braceletId: 'P-003' },
+  { id: 4, name: 'Hugo', surname: 'Ramirez Vega', braceletId: 'P-004' },
+  { id: 5, name: 'Marta', surname: 'Serra Ruiz', braceletId: 'P-005' },
+  { id: 6, name: 'Sergio', surname: 'Campos Mora', braceletId: 'P-006' },
+  { id: 7, name: 'Aina', surname: 'Torres Vidal', braceletId: 'P-007' },
+  { id: 8, name: 'Pau', surname: 'Ferrer Soler', braceletId: 'P-008' },
 ])
 
 const newEmployee = reactive({
   name: '',
   surname: '',
+  braceletId: '',
 })
+
+const draggedAssignment = ref(null)
+const dragOverTarget = ref(null)
 
 const weekSchedule = reactive([
   {
@@ -56,9 +60,24 @@ const totalAssignments = computed(() =>
 
 const getEmployee = (id) => employees.value.find((employee) => employee.id === id)
 
+const shiftSelections = reactive(
+  Object.fromEntries(
+    weekSchedule.flatMap((day) => [
+      [`${day.day}-morning`, ''],
+      [`${day.day}-afternoon`, ''],
+    ]),
+  ),
+)
+
+const selectionKey = (day, shift) => `${day.day}-${shift}`
+
+const getAvailableEmployees = (day, shift) =>
+  employees.value.filter((employee) => !day[shift].includes(employee.id))
+
 const addEmployee = () => {
   const name = newEmployee.name.trim()
   const surname = newEmployee.surname.trim()
+  const braceletId = newEmployee.braceletId.trim()
 
   if (!name || !surname) return
 
@@ -66,12 +85,77 @@ const addEmployee = () => {
     id: Date.now(),
     name,
     surname,
+    braceletId,
   }
 
   employees.value.push(employee)
-  weekSchedule[0].morning.push(employee.id)
   newEmployee.name = ''
   newEmployee.surname = ''
+  newEmployee.braceletId = ''
+}
+
+const addEmployeeToShift = (day, shift) => {
+  const key = selectionKey(day, shift)
+  const employeeId = Number(shiftSelections[key])
+
+  if (!employeeId || day[shift].includes(employeeId)) return
+
+  day[shift].push(employeeId)
+  shiftSelections[key] = ''
+}
+
+const setDragData = (event, day, shift, index) => {
+  draggedAssignment.value = {
+    day,
+    shift,
+    index,
+    employeeId: day[shift][index],
+  }
+
+  event.dataTransfer.effectAllowed = 'move'
+  event.dataTransfer.setData('text/plain', String(day[shift][index]))
+}
+
+const setDragOverTarget = (day, shift, index = day[shift].length) => {
+  dragOverTarget.value = {
+    key: selectionKey(day, shift),
+    index,
+  }
+}
+
+const isDragOverTarget = (day, shift, index) =>
+  dragOverTarget.value?.key === selectionKey(day, shift) && dragOverTarget.value?.index === index
+
+const isDraggedAssignment = (day, shift, index) =>
+  draggedAssignment.value?.day === day &&
+  draggedAssignment.value?.shift === shift &&
+  draggedAssignment.value?.index === index
+
+const clearDragState = () => {
+  draggedAssignment.value = null
+  dragOverTarget.value = null
+}
+
+const dropEmployee = (targetDay, targetShift, targetIndex = targetDay[targetShift].length) => {
+  const source = draggedAssignment.value
+
+  if (!source) return
+
+  const sourceList = source.day[source.shift]
+  const targetList = targetDay[targetShift]
+  const isSameShift = source.day === targetDay && source.shift === targetShift
+
+  if (!isSameShift && targetList.includes(source.employeeId)) {
+    clearDragState()
+    return
+  }
+
+  const [employeeId] = sourceList.splice(source.index, 1)
+  const adjustedTargetIndex =
+    isSameShift && source.index < targetIndex ? targetIndex - 1 : targetIndex
+
+  targetList.splice(adjustedTargetIndex, 0, employeeId)
+  clearDragState()
 }
 
 const moveEmployee = (day, shift, index, direction) => {
@@ -120,6 +204,11 @@ const moveEmployee = (day, shift, index, direction) => {
           <input v-model="newEmployee.surname" type="text" placeholder="Ej. Garcia Perez" />
         </label>
 
+        <label>
+          ID pulsera
+          <input v-model="newEmployee.braceletId" type="text" placeholder="Ej. P-009" />
+        </label>
+
         <button type="submit">Anadir empleado</button>
       </form>
 
@@ -133,11 +222,54 @@ const moveEmployee = (day, shift, index, direction) => {
               <span>{{ day.morning.length }} empleados</span>
             </div>
 
-            <ol class="employee-list">
-              <li v-for="(employeeId, index) in day.morning" :key="employeeId">
+            <div class="shift-picker">
+              <select v-model="shiftSelections[selectionKey(day, 'morning')]">
+                <option value="">Seleccionar empleado</option>
+                <option
+                  v-for="employee in getAvailableEmployees(day, 'morning')"
+                  :key="employee.id"
+                  :value="employee.id"
+                >
+                  {{ employee.name }} {{ employee.surname }}
+                </option>
+              </select>
+              <button
+                type="button"
+                :disabled="!shiftSelections[selectionKey(day, 'morning')]"
+                @click="addEmployeeToShift(day, 'morning')"
+              >
+                Anadir
+              </button>
+            </div>
+
+            <ol
+              class="employee-list"
+              :class="{ 'drop-at-end': isDragOverTarget(day, 'morning', day.morning.length) }"
+              @dragover.prevent="setDragOverTarget(day, 'morning')"
+              @dragleave="dragOverTarget = null"
+              @drop="dropEmployee(day, 'morning')"
+            >
+              <li
+                v-for="(employeeId, index) in day.morning"
+                :key="employeeId"
+                draggable="true"
+                :class="{
+                  dragging: isDraggedAssignment(day, 'morning', index),
+                  'drop-target': isDragOverTarget(day, 'morning', index),
+                }"
+                @dragstart="setDragData($event, day, 'morning', index)"
+                @dragend="clearDragState"
+                @dragover.prevent="setDragOverTarget(day, 'morning', index)"
+                @drop.stop="dropEmployee(day, 'morning', index)"
+              >
                 <span class="position">{{ index + 1 }}</span>
-                <span class="employee-name">
-                  {{ getEmployee(employeeId)?.name }} {{ getEmployee(employeeId)?.surname }}
+                <span class="employee-info">
+                  <span class="employee-name">
+                    {{ getEmployee(employeeId)?.name }} {{ getEmployee(employeeId)?.surname }}
+                  </span>
+                  <span v-if="getEmployee(employeeId)?.braceletId" class="bracelet-id">
+                    Pulsera {{ getEmployee(employeeId)?.braceletId }}
+                  </span>
                 </span>
                 <div class="order-actions">
                   <button
@@ -167,11 +299,54 @@ const moveEmployee = (day, shift, index, direction) => {
               <span>{{ day.afternoon.length }} empleados</span>
             </div>
 
-            <ol class="employee-list">
-              <li v-for="(employeeId, index) in day.afternoon" :key="employeeId">
+            <div class="shift-picker">
+              <select v-model="shiftSelections[selectionKey(day, 'afternoon')]">
+                <option value="">Seleccionar empleado</option>
+                <option
+                  v-for="employee in getAvailableEmployees(day, 'afternoon')"
+                  :key="employee.id"
+                  :value="employee.id"
+                >
+                  {{ employee.name }} {{ employee.surname }}
+                </option>
+              </select>
+              <button
+                type="button"
+                :disabled="!shiftSelections[selectionKey(day, 'afternoon')]"
+                @click="addEmployeeToShift(day, 'afternoon')"
+              >
+                Anadir
+              </button>
+            </div>
+
+            <ol
+              class="employee-list"
+              :class="{ 'drop-at-end': isDragOverTarget(day, 'afternoon', day.afternoon.length) }"
+              @dragover.prevent="setDragOverTarget(day, 'afternoon')"
+              @dragleave="dragOverTarget = null"
+              @drop="dropEmployee(day, 'afternoon')"
+            >
+              <li
+                v-for="(employeeId, index) in day.afternoon"
+                :key="employeeId"
+                draggable="true"
+                :class="{
+                  dragging: isDraggedAssignment(day, 'afternoon', index),
+                  'drop-target': isDragOverTarget(day, 'afternoon', index),
+                }"
+                @dragstart="setDragData($event, day, 'afternoon', index)"
+                @dragend="clearDragState"
+                @dragover.prevent="setDragOverTarget(day, 'afternoon', index)"
+                @drop.stop="dropEmployee(day, 'afternoon', index)"
+              >
                 <span class="position">{{ index + 1 }}</span>
-                <span class="employee-name">
-                  {{ getEmployee(employeeId)?.name }} {{ getEmployee(employeeId)?.surname }}
+                <span class="employee-info">
+                  <span class="employee-name">
+                    {{ getEmployee(employeeId)?.name }} {{ getEmployee(employeeId)?.surname }}
+                  </span>
+                  <span v-if="getEmployee(employeeId)?.braceletId" class="bracelet-id">
+                    Pulsera {{ getEmployee(employeeId)?.braceletId }}
+                  </span>
                 </span>
                 <div class="order-actions">
                   <button
@@ -294,7 +469,7 @@ p {
 
 .employee-form {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) minmax(220px, 1.3fr) auto;
+  grid-template-columns: minmax(160px, 1fr) minmax(220px, 1.2fr) minmax(140px, 0.8fr) auto;
   gap: 14px;
   align-items: end;
   padding: 20px;
@@ -312,7 +487,8 @@ label {
   font-weight: 800;
 }
 
-input {
+input,
+select {
   width: 100%;
   min-height: 46px;
   box-sizing: border-box;
@@ -324,7 +500,8 @@ input {
   font: inherit;
 }
 
-input:focus {
+input:focus,
+select:focus {
   border-color: #00843d;
   outline: 3px solid rgba(0, 132, 61, 0.18);
 }
@@ -400,12 +577,36 @@ h3 {
   font-weight: 700;
 }
 
+.shift-picker {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.shift-picker select {
+  min-height: 40px;
+  padding: 0 10px;
+  font-size: 0.9rem;
+}
+
+.shift-picker button {
+  min-height: 40px;
+  padding: 0 12px;
+  background: #007d3a;
+  font-size: 0.9rem;
+}
+
 .employee-list {
   display: grid;
   gap: 8px;
   margin: 0;
   padding: 0;
   list-style: none;
+}
+
+.employee-list.drop-at-end {
+  padding-bottom: 10px;
+  border-bottom: 2px dashed rgba(0, 132, 61, 0.34);
 }
 
 .employee-list li {
@@ -418,6 +619,26 @@ h3 {
   border: 1px solid rgba(23, 51, 38, 0.1);
   border-radius: 8px;
   background: #ffffff;
+  cursor: grab;
+  transition:
+    border-color 0.16s ease,
+    box-shadow 0.16s ease,
+    opacity 0.16s ease,
+    transform 0.16s ease;
+}
+
+.employee-list li:active {
+  cursor: grabbing;
+}
+
+.employee-list li.dragging {
+  opacity: 0.48;
+  transform: scale(0.99);
+}
+
+.employee-list li.drop-target {
+  border-color: rgba(0, 132, 61, 0.58);
+  box-shadow: inset 4px 0 0 #00843d;
 }
 
 .position {
@@ -433,6 +654,18 @@ h3 {
 
 .employee-name {
   overflow-wrap: anywhere;
+  font-weight: 800;
+}
+
+.employee-info {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.bracelet-id {
+  color: #627267;
+  font-size: 0.78rem;
   font-weight: 800;
 }
 
@@ -470,6 +703,10 @@ h3 {
 
   .order-actions {
     grid-column: 2;
+  }
+
+  .shift-picker {
+    grid-template-columns: 1fr;
   }
 }
 </style>
