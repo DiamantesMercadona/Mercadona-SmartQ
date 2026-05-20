@@ -79,14 +79,14 @@ class VisionEngine:
             pass
 
         # Cargar configuración del modelo YOLOv8 desde la configuración global o establecer valores por defecto
-        yolo_model = CONFIG.get("APP", {}).get("yolo_model", "yolov8n.pt")
+        yolo_model = CONFIG.get("VISION", {}).get("yolo_model", "yolov8n.pt")
         self.model = YOLO(yolo_model)
-        self.confidence_threshold = CONFIG.get("APP", {}).get("yolo_confidence", 0.3)
-        self.iou_threshold = CONFIG.get("APP", {}).get("yolo_iou", 0.45)
-        self.imgsz = CONFIG.get("APP", {}).get("yolo_imgsz", 480)
+        self.confidence_threshold = CONFIG.get("VISION", {}).get("yolo_confidence", 0.3)
+        self.iou_threshold = CONFIG.get("VISION", {}).get("yolo_iou", 0.45)
+        self.imgsz = CONFIG.get("VISION", {}).get("yolo_imgsz", 480)
 
         # Configuración del factor de omisión de frames (frame skipping) para optimizar rendimiento
-        self.frame_skip = CONFIG.get("APP", {}).get("yolo_frame_skip", 2)
+        self.frame_skip = CONFIG.get("VISION", {}).get("yolo_frame_skip", 2)
         self.frame_count = 0
         self.last_person_boxes: List[Tuple[int, int, int, int]] = []
 
