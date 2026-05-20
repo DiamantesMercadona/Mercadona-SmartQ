@@ -1,7 +1,7 @@
 ﻿import cv2
 import numpy as np
 from ultralytics import YOLO
-from typing import Union, List, Tuple
+from typing import Union, List, Tuple, Dict
 import sqlite3
 from datetime import datetime
 import os
@@ -13,6 +13,10 @@ try:
     from .database import DatabaseMSQ
 except ImportError:
     from database import DatabaseMSQ
+try:
+    from .config import CONFIG
+except ImportError:
+    from config import CONFIG
 
 class VisionEngine:
     """
@@ -44,14 +48,15 @@ class VisionEngine:
 
         cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
 
-        # Modelo YOLOv8 - optimizado para velocidad en video real
-        self.model = YOLO('yolov8n.pt')  # Modelo nano para máxima velocidad
-        self.confidence_threshold = 0.3   # Threshold más alto para reducir parpadeo
-        self.iou_threshold = 0.45         # NMS estándar
-        self.imgsz = 480                  # Resolución muy baja para 30 fps en video real
-        
-        # Frame skipping para duplicar FPS
-        self.frame_skip = 2               # Procesar cada 2 frames
+        # Modelo YOLOv8 - parámetros controlados desde config para pruebas
+        yolo_model = CONFIG.get("APP", {}).get("yolo_model", "yolov8n.pt")
+        self.model = YOLO(yolo_model)
+        self.confidence_threshold = CONFIG.get("APP", {}).get("yolo_confidence", 0.3)
+        self.iou_threshold = CONFIG.get("APP", {}).get("yolo_iou", 0.45)
+        self.imgsz = CONFIG.get("APP", {}).get("yolo_imgsz", 480)
+
+        # Frame skipping configurable (1 = todos los frames)
+        self.frame_skip = CONFIG.get("APP", {}).get("yolo_frame_skip", 2)
         self.frame_count = 0
         self.last_person_boxes = []       # Cajas del último frame procesado
         
@@ -88,8 +93,20 @@ class VisionEngine:
         for i, pos_idx in enumerate(posiciones, 1):
             caja_id = str(i)
             x_roi = left_margin + pos_idx * (roi_w + margin_between)
-            self.rois[caja_id] = (x_roi, 250, roi_w, 500)
+            base_y = 250
+            h_roi = 500
+
+            y_roi = base_y
+
+            self.rois[caja_id] = (int(x_roi), int(y_roi), int(roi_w), h_roi)
             self.counts[caja_id] = 0
+
+        # Desplazamientos independientes para cada lado (en píxeles)
+        # En el lado izquierdo la base inferior debe moverse hacia la izquierda
+        # En el lado derecho la base inferior debe moverse hacia la derecha
+        self.roi_lower_shift_left = 70
+        self.roi_lower_shift_right = 70
+        self.roi_lower_width = roi_w
 
         # Conexión a la base de datos (canonical schema)
         self.db = DatabaseMSQ()
@@ -151,6 +168,147 @@ class VisionEngine:
         except Exception:
             return boxes
 
+    def _iou(self, boxA: Tuple[int, int, int, int], boxB: Tuple[int, int, int, int]) -> float:
+        # Intersection over Union for two boxes
+        xA = max(boxA[0], boxB[0])
+        yA = max(boxA[1], boxB[1])
+        xB = min(boxA[2], boxB[2])
+        yB = min(boxA[3], boxB[3])
+
+        interW = max(0, xB - xA)
+        interH = max(0, yB - yA)
+        interArea = interW * interH
+
+        boxAArea = max(0, boxA[2] - boxA[0]) * max(0, boxA[3] - boxA[1])
+        boxBArea = max(0, boxB[2] - boxB[0]) * max(0, boxB[3] - boxB[1])
+
+        denom = float(boxAArea + boxBArea - interArea)
+        if denom <= 0:
+            return 0.0
+        return interArea / denom
+
+    def _get_roi_polygon(
+        self,
+        x: int,
+        y: int,
+        w: int,
+        h: int,
+        bottom_left_x: int,
+    ) -> np.ndarray:
+        """
+        Devuelve el polígono de una ROI manteniendo la parte superior fija.
+        La parte inferior se encadena con la ROI siguiente para que los extremos
+        inferiores queden contiguos sin mover la parte superior.
+        """
+        bottom_right_x = bottom_left_x + w
+        return np.array([
+            [x, y],
+            [x + w, y],
+            [bottom_right_x, y + h],
+            [bottom_left_x, y + h],
+        ], dtype=np.int32)
+
+    def _get_roi_lower_chain_start(self, caja_id: str) -> int:
+        """
+        Calcula el inicio de la cadena inferior para cada lado.
+        """
+        roi_num = int(caja_id)
+        is_left = roi_num <= 3
+        first_roi_id = "1" if is_left else "4"
+        first_x, _, _, _ = self.rois[first_roi_id]
+        if is_left:
+            return first_x - self.roi_lower_shift_left
+        else:
+            return first_x + self.roi_lower_shift_right
+
+    def _point_in_roi(self, point: Tuple[int, int], roi_polygon: np.ndarray) -> bool:
+        """
+        Comprueba si un punto cae dentro de un polígono ROI.
+        """
+        return cv2.pointPolygonTest(roi_polygon, point, False) >= 0
+
+    def _update_tracks(self, detections: List[Tuple[int, int, int, int]]) -> List[Tuple[int, Tuple[int, int, int, int]]]:
+        """
+        Actualiza tracks existentes con las detecciones actuales usando greedy IoU matching.
+        Devuelve lista de (track_id, box) para tracks activos.
+        """
+        # Inicializar estructura de tracks si no existe
+        if not hasattr(self, 'tracks'):
+            # tracks: id -> {box, misses}
+            self.tracks: Dict[int, Dict] = {}
+            self.next_track_id = 1
+            self.max_missed_frames = 5
+            self.track_iou_threshold = 0.3
+
+        matched_tracks = set()
+        matched_dets = set()
+
+        # Build IoU matrix
+        iou_matrix = []
+        for t_id, t in self.tracks.items():
+            row = [self._iou(t['box'], d) for d in detections]
+            iou_matrix.append((t_id, row))
+
+        # Greedy matching: for each existing track, find best detection
+        for t_id, row in iou_matrix:
+            if not row:
+                continue
+            best_idx = int(np.argmax(row))
+            best_iou = row[best_idx]
+            if best_iou >= self.track_iou_threshold and best_idx not in matched_dets:
+                # match
+                self.tracks[t_id]['box'] = detections[best_idx]
+                self.tracks[t_id]['misses'] = 0
+                matched_tracks.add(t_id)
+                matched_dets.add(best_idx)
+
+        # Unmatched detections -> new tracks
+        for i, det in enumerate(detections):
+            if i in matched_dets:
+                continue
+            tid = self.next_track_id
+            self.tracks[tid] = {'box': det, 'misses': 0}
+            self.next_track_id += 1
+
+        # Increment misses for unmatched tracks
+        for t_id in list(self.tracks.keys()):
+            if t_id in matched_tracks:
+                continue
+            self.tracks[t_id]['misses'] += 1
+            if self.tracks[t_id]['misses'] > self.max_missed_frames:
+                # delete stale track
+                del self.tracks[t_id]
+
+        # Return active tracks
+        active = [(t_id, data['box']) for t_id, data in self.tracks.items() if data['misses'] <= self.max_missed_frames]
+        return active
+
+    def _get_roi_shape_params(self, caja_id: str) -> Tuple[bool, int, int]:
+        """
+        Devuelve si la ROI pertenece al lado izquierdo y el índice relativo dentro de su lado.
+        """
+        roi_num = int(caja_id)
+        is_left = roi_num <= 3
+        side_index = roi_num - 1 if is_left else roi_num - 4
+        return is_left, side_index, roi_num
+
+    def _build_roi_polygon(self, caja_id: str) -> np.ndarray:
+        """
+        Construye el polígono de la ROI con el borde superior intacto y la base
+        inferior encadenada por lado.
+        """
+        x, y, w, h = self.rois[caja_id]
+        is_left, side_index, _ = self._get_roi_shape_params(caja_id)
+        # Mantener la separación horizontal entre las esquinas superiores
+        # y replicarla en las esquinas inferiores.
+        first_roi_id = "1" if is_left else "4"
+        first_top_x = self.rois[first_roi_id][0]
+        # delta entre el top-left de esta ROI y el primero del lado
+        delta_x = x - first_top_x
+        lower_chain_start = self._get_roi_lower_chain_start(caja_id)
+        bottom_left_x = int(lower_chain_start + delta_x)
+        return self._get_roi_polygon(x, y, w, h, bottom_left_x)
+
     def process(self) -> None:
         """
         Bucle principal optimizado para 30 fps con frame skipping.
@@ -183,25 +341,48 @@ class VisionEngine:
                 # Separar detecciones solapadas
                 person_boxes = self._separate_overlapping_boxes(person_boxes)
                 self.last_person_boxes = person_boxes
+                # Actualizar tracks para persistencia temporal
+                tracked = self._update_tracks(person_boxes)
             else:
                 # Usar cajas del último frame procesado (suavizar)
+                # Intentar mantener tracks cuando no hay detecciones nuevas
                 person_boxes = self.last_person_boxes
+                tracked = self._update_tracks(person_boxes)
 
             current_counts = {str(i): 0 for i in range(1, 7)}
 
-            for (x1, y1, x2, y2) in person_boxes:
-                feet_x = int((x1 + x2) / 2)
-                feet_y = y2
+            # Si tenemos tracking, usamos los tracks; si no, usamos detecciones sueltas
+            if tracked:
+                for track_id, (x1, y1, x2, y2) in tracked:
+                    feet_x = int((x1 + x2) / 2)
+                    feet_y = y2
 
-                in_any_roi = False
-                for caja_id, (x_roi, y_roi, w_roi, h_roi) in self.rois.items():
-                    if x_roi < feet_x < x_roi + w_roi and y_roi < feet_y < y_roi + h_roi:
-                        current_counts[caja_id] += 1
-                        in_any_roi = True
-                        break  # Una persona solo puede estar en una cola
+                    in_any_roi = False
+                    for caja_id, (x_roi, y_roi, w_roi, h_roi) in self.rois.items():
+                        roi_polygon = self._build_roi_polygon(caja_id)
+                        if self._point_in_roi((feet_x, feet_y), roi_polygon):
+                            current_counts[caja_id] += 1
+                            in_any_roi = True
+                            break
 
-                color = (0, 255, 0) if in_any_roi else (200, 200, 200)
-                cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+                    color = (0, 255, 0) if in_any_roi else (200, 200, 200)
+                    cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+                    cv2.putText(frame, f"ID:{track_id}", (x1, y1 - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
+            else:
+                for (x1, y1, x2, y2) in person_boxes:
+                    feet_x = int((x1 + x2) / 2)
+                    feet_y = y2
+
+                    in_any_roi = False
+                    for caja_id, (x_roi, y_roi, w_roi, h_roi) in self.rois.items():
+                        roi_polygon = self._build_roi_polygon(caja_id)
+                        if self._point_in_roi((feet_x, feet_y), roi_polygon):
+                            current_counts[caja_id] += 1
+                            in_any_roi = True
+                            break  # Una persona solo puede estar en una cola
+
+                    color = (0, 255, 0) if in_any_roi else (200, 200, 200)
+                    cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
 
             self.counts = current_counts
 
@@ -241,7 +422,8 @@ class VisionEngine:
         """
         # Dibujar cada ROI y su contador
         for caja_id, (x, y, w, h) in self.rois.items():
-            cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 2)
+            roi_polygon = self._build_roi_polygon(caja_id)
+            cv2.polylines(frame, [roi_polygon], isClosed=True, color=(255, 0, 0), thickness=2)
             cv2.putText(frame, f"Caja {caja_id}: {self.counts[caja_id]}", (x, y - 10), 
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
 

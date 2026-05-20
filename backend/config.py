@@ -7,7 +7,12 @@ CONFIG = {
         "default_image": "backend/resources/test_photo.jpg",        # Imagen por defecto para pruebas
         "default_video": "backend/resources/3d_demo.webm",      # Video de prueba por defecto
         "default_source": "backend/resources/3d_demo.webm",     # Fuente por defecto si se usa un archivo
-        "yolo_model": "yolov8n.pt",                                 # Modelo YOLO original para detección de personas
+        # Modelo YOLO y parámetros por defecto: usar tamaño S para mejor recall
+        "yolo_model": "yolov8s.pt",                               # Modelo YOLO para detección de personas (sensible)
+        "yolo_imgsz": 640,                                         # Resolución de entrada para inferencia (px)
+        "yolo_confidence": 0.20,                                   # Umbral de confianza (bajar para más recall)
+        "yolo_iou": 0.45,                                          # IOU para NMS
+        "yolo_frame_skip": 1,                                      # Procesar cada N frames (1 = todos los frames)
     },
 
     # Infraestructura y Persistencia
