@@ -1,4 +1,4 @@
-﻿import cv2
+import cv2
 import numpy as np
 from ultralytics import YOLO
 from typing import Union, List, Tuple, Dict
@@ -107,6 +107,8 @@ class VisionEngine:
         self.roi_lower_shift_left = 70
         self.roi_lower_shift_right = 70
         self.roi_lower_width = roi_w
+        self.roi_lower_expansion = 70
+        self.roi_upper_expansion = -20  # Reducción de ancho superior en cada ROI (20px)
 
         # Conexión a la base de datos (canonical schema)
         self.db = DatabaseMSQ()
@@ -189,21 +191,19 @@ class VisionEngine:
 
     def _get_roi_polygon(
         self,
-        x: int,
+        top_left_x: int,
+        top_right_x: int,
         y: int,
-        w: int,
         h: int,
         bottom_left_x: int,
+        bottom_right_x: int,
     ) -> np.ndarray:
         """
-        Devuelve el polígono de una ROI manteniendo la parte superior fija.
-        La parte inferior se encadena con la ROI siguiente para que los extremos
-        inferiores queden contiguos sin mover la parte superior.
+        Devuelve el polígono de una ROI especificando todos sus extremos.
         """
-        bottom_right_x = bottom_left_x + w
         return np.array([
-            [x, y],
-            [x + w, y],
+            [top_left_x, y],
+            [top_right_x, y],
             [bottom_right_x, y + h],
             [bottom_left_x, y + h],
         ], dtype=np.int32)
@@ -294,20 +294,38 @@ class VisionEngine:
 
     def _build_roi_polygon(self, caja_id: str) -> np.ndarray:
         """
-        Construye el polígono de la ROI con el borde superior intacto y la base
-        inferior encadenada por lado.
+        Construye el polígono de la ROI con los bordes superior e inferior
+        modificados según la especificación (base inferior incrementada en
+        self.roi_lower_expansion de ancho, y base superior reducida en
+        self.roi_upper_expansion de ancho, respetando las direcciones y separaciones).
         """
         x, y, w, h = self.rois[caja_id]
-        is_left, side_index, _ = self._get_roi_shape_params(caja_id)
-        # Mantener la separación horizontal entre las esquinas superiores
-        # y replicarla en las esquinas inferiores.
-        first_roi_id = "1" if is_left else "4"
-        first_top_x = self.rois[first_roi_id][0]
-        # delta entre el top-left de esta ROI y el primero del lado
-        delta_x = x - first_top_x
-        lower_chain_start = self._get_roi_lower_chain_start(caja_id)
-        bottom_left_x = int(lower_chain_start + delta_x)
-        return self._get_roi_polygon(x, y, w, h, bottom_left_x)
+        roi_num = int(caja_id)
+        is_left = roi_num <= 3
+        
+        bottom_expansion = self.roi_lower_expansion
+        top_expansion = self.roi_upper_expansion
+
+        if is_left:
+            # Coordenadas superiores (se reducen en la proporción especificada)
+            top_left_x = x - top_expansion * (4 - roi_num)
+            top_right_x = top_left_x + w + top_expansion
+            
+            # Coordenadas inferiores
+            bottom_left_x = x - self.roi_lower_shift_left - bottom_expansion * (4 - roi_num)
+            bottom_right_x = bottom_left_x + w + bottom_expansion
+        else:
+            # Coordenadas superiores
+            top_left_x = x + top_expansion * (roi_num - 4)
+            top_right_x = top_left_x + w + top_expansion
+            
+            # Coordenadas inferiores
+            bottom_left_x = x + self.roi_lower_shift_right + bottom_expansion * (roi_num - 4)
+            bottom_right_x = bottom_left_x + w + bottom_expansion
+
+        return self._get_roi_polygon(
+            int(top_left_x), int(top_right_x), y, h, int(bottom_left_x), int(bottom_right_x)
+        )
 
     def process(self) -> None:
         """
