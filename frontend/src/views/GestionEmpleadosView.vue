@@ -1,16 +1,14 @@
 <script setup>
-import { computed, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 
-const employees = ref([
-  { id: 1, name: 'Laura', surname: 'Martinez Soto', braceletId: 'P-001' },
-  { id: 2, name: 'Carlos', surname: 'Navarro Gil', braceletId: 'P-002' },
-  { id: 3, name: 'Nuria', surname: 'Lopez Pardo', braceletId: 'P-003' },
-  { id: 4, name: 'Hugo', surname: 'Ramirez Vega', braceletId: 'P-004' },
-  { id: 5, name: 'Marta', surname: 'Serra Ruiz', braceletId: 'P-005' },
-  { id: 6, name: 'Sergio', surname: 'Campos Mora', braceletId: 'P-006' },
-  { id: 7, name: 'Aina', surname: 'Torres Vidal', braceletId: 'P-007' },
-  { id: 8, name: 'Pau', surname: 'Ferrer Soler', braceletId: 'P-008' },
-])
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1'
+
+const employees = ref([])
+const loading = ref(false)
+const savingEmployee = ref(false)
+const savingSchedule = ref(false)
+const errorMessage = ref('')
+const successMessage = ref('')
 
 const newEmployee = reactive({
   name: '',
@@ -24,33 +22,39 @@ const dragOverTarget = ref(null)
 const weekSchedule = reactive([
   {
     day: 'Lunes',
-    morning: [1, 2, 3],
-    afternoon: [4, 5],
+    dbDay: 'lunes',
+    morning: [],
+    afternoon: [],
   },
   {
     day: 'Martes',
-    morning: [6, 1],
-    afternoon: [7, 8, 2],
+    dbDay: 'martes',
+    morning: [],
+    afternoon: [],
   },
   {
     day: 'Miercoles',
-    morning: [3, 4],
-    afternoon: [5, 6, 7],
+    dbDay: 'miercoles',
+    morning: [],
+    afternoon: [],
   },
   {
     day: 'Jueves',
-    morning: [8, 1, 5],
-    afternoon: [2, 3],
+    dbDay: 'jueves',
+    morning: [],
+    afternoon: [],
   },
   {
     day: 'Viernes',
-    morning: [4, 7],
-    afternoon: [6, 8, 1],
+    dbDay: 'viernes',
+    morning: [],
+    afternoon: [],
   },
   {
     day: 'Sabado',
-    morning: [2, 5, 6],
-    afternoon: [3, 4],
+    dbDay: 'sabado',
+    morning: [],
+    afternoon: [],
   },
 ])
 
@@ -58,7 +62,22 @@ const totalAssignments = computed(() =>
   weekSchedule.reduce((total, day) => total + day.morning.length + day.afternoon.length, 0),
 )
 
-const getEmployee = (id) => employees.value.find((employee) => employee.id === id)
+const normalizeEmployee = (employee) => ({
+  id: Number(employee.id),
+  name: employee.name ?? employee.nombre ?? '',
+  surname: employee.surname ?? employee.apellidos ?? '',
+  braceletId: employee.braceletId ?? employee.id_pulsera ?? '',
+})
+
+const normalizeOrder = (order) => {
+  const parsedOrder = typeof order === 'string' ? JSON.parse(order || '[]') : order
+
+  return (Array.isArray(parsedOrder) ? parsedOrder : [])
+    .map((item) => Number(typeof item === 'object' ? item.id : item))
+    .filter(Boolean)
+}
+
+const getEmployee = (id) => employees.value.find((employee) => employee.id === Number(id))
 
 const shiftSelections = reactive(
   Object.fromEntries(
@@ -74,24 +93,108 @@ const selectionKey = (day, shift) => `${day.day}-${shift}`
 const getAvailableEmployees = (day, shift) =>
   employees.value.filter((employee) => !day[shift].includes(employee.id))
 
-const addEmployee = () => {
+const requestJson = async (path, options = {}) => {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+    ...options,
+  })
+
+  if (!response.ok) {
+    const message = await response.text()
+    throw new Error(message || `Error HTTP ${response.status}`)
+  }
+
+  if (response.status === 204) return null
+  return response.json()
+}
+
+const loadEmployees = async () => {
+  const data = await requestJson('/empleados')
+  const list = data?.empleados ?? data?.employees ?? data ?? []
+  employees.value = list.map(normalizeEmployee)
+}
+
+const loadSchedule = async () => {
+  const data = await requestJson('/turnos')
+  const shifts = data?.turnos ?? data?.shifts ?? data ?? []
+
+  for (const day of weekSchedule) {
+    day.morning = []
+    day.afternoon = []
+  }
+
+  for (const item of shifts) {
+    const day = weekSchedule.find((candidate) => candidate.dbDay === item.dia_semana)
+    if (!day) continue
+
+    const shift = item.turno === 'mañana' || item.turno === 'manana' || item.turno === 'morning'
+      ? 'morning'
+      : 'afternoon'
+
+    day[shift] = normalizeOrder(item.orden ?? item.orden_json ?? item.order)
+  }
+}
+
+const loadData = async () => {
+  loading.value = true
+  errorMessage.value = ''
+  successMessage.value = ''
+
+  try {
+    await Promise.all([loadEmployees(), loadSchedule()])
+  } catch (error) {
+    errorMessage.value =
+      error instanceof Error
+        ? `${error.message}. Revisa que existan GET /api/v1/empleados y GET /api/v1/turnos.`
+        : 'No se han podido cargar empleados y turnos.'
+  } finally {
+    loading.value = false
+  }
+}
+
+const addEmployee = async () => {
   const name = newEmployee.name.trim()
   const surname = newEmployee.surname.trim()
   const braceletId = newEmployee.braceletId.trim()
 
   if (!name || !surname) return
 
-  const employee = {
-    id: Date.now(),
-    name,
-    surname,
-    braceletId,
-  }
+  savingEmployee.value = true
+  errorMessage.value = ''
+  successMessage.value = ''
 
-  employees.value.push(employee)
-  newEmployee.name = ''
-  newEmployee.surname = ''
-  newEmployee.braceletId = ''
+  try {
+    const data = await requestJson('/empleados', {
+      method: 'POST',
+      body: JSON.stringify({
+        nombre: name,
+        apellidos: surname,
+        id_pulsera: braceletId || null,
+      }),
+    })
+
+    const created = data?.empleado ?? data?.employee ?? data
+    if (created?.id) {
+      employees.value.push(normalizeEmployee(created))
+    } else {
+      await loadEmployees()
+    }
+
+    newEmployee.name = ''
+    newEmployee.surname = ''
+    newEmployee.braceletId = ''
+    successMessage.value = 'Empleado guardado.'
+  } catch (error) {
+    errorMessage.value =
+      error instanceof Error
+        ? `${error.message}. Revisa que exista POST /api/v1/empleados.`
+        : 'No se ha podido guardar el empleado.'
+  } finally {
+    savingEmployee.value = false
+  }
 }
 
 const addEmployeeToShift = (day, shift) => {
@@ -102,6 +205,43 @@ const addEmployeeToShift = (day, shift) => {
 
   day[shift].push(employeeId)
   shiftSelections[key] = ''
+}
+
+const schedulePayload = () =>
+  weekSchedule.flatMap((day) => [
+    {
+      dia_semana: day.dbDay,
+      turno: 'mañana',
+      orden: day.morning.map((id) => ({ id })),
+    },
+    {
+      dia_semana: day.dbDay,
+      turno: 'tarde',
+      orden: day.afternoon.map((id) => ({ id })),
+    },
+  ])
+
+const saveSchedule = async () => {
+  savingSchedule.value = true
+  errorMessage.value = ''
+  successMessage.value = ''
+
+  try {
+    await requestJson('/turnos', {
+      method: 'PUT',
+      body: JSON.stringify({
+        turnos: schedulePayload(),
+      }),
+    })
+    successMessage.value = 'Turnos guardados.'
+  } catch (error) {
+    errorMessage.value =
+      error instanceof Error
+        ? `${error.message}. Revisa que exista PUT /api/v1/turnos.`
+        : 'No se han podido guardar los turnos.'
+  } finally {
+    savingSchedule.value = false
+  }
 }
 
 const setDragData = (event, day, shift, index) => {
@@ -167,6 +307,8 @@ const moveEmployee = (day, shift, index, direction) => {
   const [employeeId] = list.splice(index, 1)
   list.splice(newIndex, 0, employeeId)
 }
+
+onMounted(loadData)
 </script>
 
 <template>
@@ -179,8 +321,8 @@ const moveEmployee = (day, shift, index, direction) => {
           <div>
             <h1>Gestion de empleados</h1>
             <p>
-              Organiza el personal por turnos de lunes a sabado. Los datos son temporales hasta
-              conectar la base de datos.
+              Organiza el personal por turnos de lunes a sabado usando los datos guardados en la
+              base de datos.
             </p>
           </div>
 
@@ -191,26 +333,51 @@ const moveEmployee = (day, shift, index, direction) => {
             <span>asignaciones</span>
           </div>
         </div>
+
+        <div class="header-actions">
+          <button type="button" class="secondary-button" :disabled="loading" @click="loadData">
+            {{ loading ? 'Cargando...' : 'Recargar datos' }}
+          </button>
+          <button type="button" :disabled="loading || savingSchedule" @click="saveSchedule">
+            {{ savingSchedule ? 'Guardando...' : 'Guardar turnos' }}
+          </button>
+        </div>
       </header>
 
       <form class="employee-form" @submit.prevent="addEmployee">
         <label>
           Nombre
-          <input v-model="newEmployee.name" type="text" placeholder="Ej. Ana" />
+          <input v-model="newEmployee.name" type="text" placeholder="Ej. Ana" :disabled="savingEmployee" />
         </label>
 
         <label>
           Apellidos
-          <input v-model="newEmployee.surname" type="text" placeholder="Ej. Garcia Perez" />
+          <input
+            v-model="newEmployee.surname"
+            type="text"
+            placeholder="Ej. Garcia Perez"
+            :disabled="savingEmployee"
+          />
         </label>
 
         <label>
           ID pulsera
-          <input v-model="newEmployee.braceletId" type="text" placeholder="Ej. P-009" />
+          <input
+            v-model="newEmployee.braceletId"
+            type="text"
+            placeholder="Ej. P-009"
+            :disabled="savingEmployee"
+          />
         </label>
 
-        <button type="submit">Anadir empleado</button>
+        <button type="submit" :disabled="savingEmployee">
+          {{ savingEmployee ? 'Guardando...' : 'Anadir empleado' }}
+        </button>
       </form>
+
+      <p v-if="errorMessage" class="status-message error" role="alert">{{ errorMessage }}</p>
+      <p v-else-if="successMessage" class="status-message success">{{ successMessage }}</p>
+      <p v-else-if="loading" class="status-message">Cargando empleados y turnos...</p>
 
       <section class="schedule-grid" aria-label="Turnos semanales">
         <article v-for="day in weekSchedule" :key="day.day" class="day-card">
@@ -223,7 +390,7 @@ const moveEmployee = (day, shift, index, direction) => {
             </div>
 
             <div class="shift-picker">
-              <select v-model="shiftSelections[selectionKey(day, 'morning')]">
+              <select v-model="shiftSelections[selectionKey(day, 'morning')]" :disabled="loading">
                 <option value="">Seleccionar empleado</option>
                 <option
                   v-for="employee in getAvailableEmployees(day, 'morning')"
@@ -235,7 +402,7 @@ const moveEmployee = (day, shift, index, direction) => {
               </select>
               <button
                 type="button"
-                :disabled="!shiftSelections[selectionKey(day, 'morning')]"
+                :disabled="loading || !shiftSelections[selectionKey(day, 'morning')]"
                 @click="addEmployeeToShift(day, 'morning')"
               >
                 Anadir
@@ -300,7 +467,7 @@ const moveEmployee = (day, shift, index, direction) => {
             </div>
 
             <div class="shift-picker">
-              <select v-model="shiftSelections[selectionKey(day, 'afternoon')]">
+              <select v-model="shiftSelections[selectionKey(day, 'afternoon')]" :disabled="loading">
                 <option value="">Seleccionar empleado</option>
                 <option
                   v-for="employee in getAvailableEmployees(day, 'afternoon')"
@@ -312,7 +479,7 @@ const moveEmployee = (day, shift, index, direction) => {
               </select>
               <button
                 type="button"
-                :disabled="!shiftSelections[selectionKey(day, 'afternoon')]"
+                :disabled="loading || !shiftSelections[selectionKey(day, 'afternoon')]"
                 @click="addEmployeeToShift(day, 'afternoon')"
               >
                 Anadir
@@ -429,6 +596,12 @@ const moveEmployee = (day, shift, index, direction) => {
   align-items: end;
 }
 
+.header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 h1 {
   margin: 0 0 10px;
   font-size: clamp(2.4rem, 6vw, 4.5rem);
@@ -525,6 +698,36 @@ button:disabled {
 .employee-form button {
   min-height: 46px;
   padding: 0 18px;
+}
+
+.secondary-button {
+  border: 1px solid rgba(23, 51, 38, 0.16);
+  background: #ffffff;
+  color: #173326;
+}
+
+.status-message {
+  margin: 0;
+  padding: 14px 16px;
+  border: 1px solid rgba(23, 51, 38, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.84);
+  color: #506459;
+  font-size: 0.95rem;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.status-message.error {
+  border-color: rgba(215, 25, 32, 0.22);
+  background: rgba(215, 25, 32, 0.08);
+  color: #9f151a;
+}
+
+.status-message.success {
+  border-color: rgba(0, 132, 61, 0.22);
+  background: rgba(0, 132, 61, 0.08);
+  color: #007d3a;
 }
 
 .schedule-grid {
