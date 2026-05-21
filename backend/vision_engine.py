@@ -589,7 +589,7 @@ class VisionEngine:
                     label = f"ID:{track_id}"
                     client_type = self.tracks[track_id].get("type", "sinCarro")
                     if client_type == "conCarro":
-                        label += " + Cart"
+                        label += " + Carro"
 
                     cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
                     cv2.putText(
@@ -601,6 +601,41 @@ class VisionEngine:
                         color,
                         1,
                     )
+
+                    # Si el cliente lleva carro, asegurar que se dibuje una caja naranja (física o estimada virtual)
+                    if client_type == "conCarro":
+                        has_physical_cart = False
+                        p_center = ((x1 + x2) / 2, (y1 + y2) / 2)
+                        for cx1, cy1, cx2, cy2 in getattr(self, "last_cart_boxes", []):
+                            c_center = ((cx1 + cx2) / 2, (cy1 + cy2) / 2)
+                            if np.sqrt((p_center[0] - c_center[0])**2 + (p_center[1] - c_center[1])**2) < self.cart_association_threshold:
+                                has_physical_cart = True
+                                break
+                        
+                        if not has_physical_cart:
+                            pw = x2 - x1
+                            ph = y2 - y1
+                            # Orientar la caja virtual según la mitad de la pantalla en la que se encuentre
+                            if x1 < frame.shape[1] / 2:
+                                cx1 = x1
+                                cy1 = y1 + int(ph * 0.45)
+                                cx2 = x1 + int(pw * 0.55)
+                                cy2 = y2
+                            else:
+                                cx1 = x2 - int(pw * 0.55)
+                                cy1 = y1 + int(ph * 0.45)
+                                cx2 = x2
+                                cy2 = y2
+                            cv2.rectangle(frame, (cx1, cy1), (cx2, cy2), (0, 165, 255), 1)  # Naranja fino
+                            cv2.putText(
+                                frame,
+                                "Carro (Est.)",
+                                (cx1, cy1 - 5),
+                                cv2.FONT_HERSHEY_SIMPLEX,
+                                0.4,
+                                (0, 165, 255),
+                                1,
+                            )
             else:
                 for x1, y1, x2, y2 in person_boxes:
                     feet_x = int((x1 + x2) / 2)
@@ -631,12 +666,46 @@ class VisionEngine:
                                     if aspect_ratio > 0.45 or pw > 63:
                                         client_type = "conCarro"
 
-                            current_counts[caja_id].append(client_type)
-                            in_any_roi = True
-                            break
+                                current_counts[caja_id].append(client_type)
+                                in_any_roi = True
+                                break
 
                     color = (0, 255, 0)      # Las cajas de las personas son siempre verdes (requisito de UI)
                     cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+
+                    # Dibujar carro estimado en el bucle fallback si corresponde
+                    if client_type == "conCarro":
+                        has_physical_cart = False
+                        p_center = ((x1 + x2) / 2, (y1 + y2) / 2)
+                        for cx1, cy1, cx2, cy2 in getattr(self, "last_cart_boxes", []):
+                            c_center = ((cx1 + cx2) / 2, (cy1 + cy2) / 2)
+                            if np.sqrt((p_center[0] - c_center[0])**2 + (p_center[1] - c_center[1])**2) < self.cart_association_threshold:
+                                has_physical_cart = True
+                                break
+                        
+                        if not has_physical_cart:
+                            pw = x2 - x1
+                            ph = y2 - y1
+                            if x1 < frame.shape[1] / 2:
+                                cx1 = x1
+                                cy1 = y1 + int(ph * 0.45)
+                                cx2 = x1 + int(pw * 0.55)
+                                cy2 = y2
+                            else:
+                                cx1 = x2 - int(pw * 0.55)
+                                cy1 = y1 + int(ph * 0.45)
+                                cx2 = x2
+                                cy2 = y2
+                            cv2.rectangle(frame, (cx1, cy1), (cx2, cy2), (0, 165, 255), 1)  # Naranja fino
+                            cv2.putText(
+                                frame,
+                                "Carro (Est.)",
+                                (cx1, cy1 - 5),
+                                cv2.FONT_HERSHEY_SIMPLEX,
+                                0.4,
+                                (0, 165, 255),
+                                1,
+                            )
 
             # Dibujar los carros detectados (para visualización premium bajo el capó)
             if hasattr(self, "last_cart_boxes"):
