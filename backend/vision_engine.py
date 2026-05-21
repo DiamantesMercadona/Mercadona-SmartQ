@@ -117,7 +117,7 @@ class VisionEngine:
         self.roi_base_y = 250
 
         self.rois: Dict[str, Tuple[int, int, int, int]] = {}
-        self.counts: Dict[str, int] = {}
+        self.counts: Dict[str, List[str]] = {}
 
         # Mapeo de posiciones espaciales de cajas en pantalla (del 0 al 6, omitiendo el 3)
         posiciones = [0, 1, 2, 4, 5, 6]
@@ -126,9 +126,12 @@ class VisionEngine:
             caja_id = str(i)
             x_roi = self.roi_left_margin + pos_idx * (roi_w + self.roi_margin_between)
             self.rois[caja_id] = (int(x_roi), int(self.roi_base_y), int(roi_w), self.roi_base_height)
-            self.counts[caja_id] = 0
+            self.counts[caja_id] = []
 
         # Configuración avanzada de variables de control y ajuste dinámico espacial
+        self.cart_association_threshold = CONFIG.get("VISION", {}).get("cart_association_threshold", 120)
+        self.last_cart_boxes: List[Tuple[int, int, int, int]] = []
+
         self.roi_lower_shift_left = 140
         self.roi_lower_shift_right = 140
         self.roi_lower_width = roi_w
@@ -452,6 +455,57 @@ class VisionEngine:
         ]
         return active
 
+    # Asocia los carros detectados a las trayectorias de personas activas basándose en proximidad espacial.
+    def _associate_carts(
+        self,
+        tracked_people: List[Tuple[int, Tuple[int, int, int, int]]],
+        cart_boxes: List[Tuple[int, int, int, int]],
+    ) -> None:
+        """Asocia carros detectados a las trayectorias de personas activas mediante proximidad espacial.
+
+        Actualiza la clave 'type' de cada trayectoria en 'self.tracks' a 'conCarro' o 'sinCarro'
+        y almacena la lista actual de carros en 'self.last_cart_boxes'.
+
+        Args:
+            tracked_people: Lista de tuplas de tipo (track_id, caja_delimitadora) activas.
+            cart_boxes: Lista de cajas delimitadoras de carros detectados en el frame actual.
+        """
+        self.last_cart_boxes = cart_boxes
+
+        for track_id, (px1, py1, px2, py2) in tracked_people:
+            p_center = ((px1 + px2) / 2, (py1 + py2) / 2)
+            p_feet = ((px1 + px2) / 2, py2)
+
+            has_cart = False
+            for cx1, cy1, cx2, cy2 in cart_boxes:
+                c_center = ((cx1 + cx2) / 2, (cy1 + cy2) / 2)
+
+                # Calcular distancias en 2D (centros y pies a centro)
+                dist_centers = np.sqrt(
+                    (p_center[0] - c_center[0]) ** 2 + (p_center[1] - c_center[1]) ** 2
+                )
+                dist_feet = np.sqrt(
+                    (p_feet[0] - c_center[0]) ** 2 + (p_feet[1] - c_center[1]) ** 2
+                )
+
+                if (
+                    dist_centers < self.cart_association_threshold
+                    or dist_feet < self.cart_association_threshold
+                ):
+                    has_cart = True
+                    break
+
+            # Heurística híbrida: si la caja de la persona es ancha, se clasifica con carro (YOLOv8s fallback)
+            if not has_cart:
+                pw = px2 - px1
+                ph = py2 - py1
+                if ph > 0:
+                    aspect_ratio = pw / ph
+                    if aspect_ratio > 0.45 or pw > 63:
+                        has_cart = True
+
+            self.tracks[track_id]["type"] = "conCarro" if has_cart else "sinCarro"
+
     # ------------------------------------------------------------------
     # Bucle principal de procesamiento de video
     # ------------------------------------------------------------------
@@ -482,7 +536,7 @@ class VisionEngine:
             if self.frame_count % self.frame_skip == 0:
                 results = self.model(
                     frame,
-                    classes=0,
+                    classes=[0, 28], # Detección de personas (0) y maletas/carros (28)
                     verbose=False,
                     conf=self.confidence_threshold,
                     iou=self.iou_threshold,
@@ -491,22 +545,30 @@ class VisionEngine:
                 )
 
                 person_boxes = []
+                cart_boxes = []
                 for r in results:
                     for box in r.boxes:
+                        cls_id = int(box.cls[0].item())
                         coords = box.xyxy[0].cpu().numpy()
                         x1, y1, x2, y2 = map(int, coords)
-                        person_boxes.append((x1, y1, x2, y2))
+                        if cls_id == 0:
+                            person_boxes.append((x1, y1, x2, y2))
+                        elif cls_id == 28:
+                            cart_boxes.append((x1, y1, x2, y2))
 
                 # Dispersar detecciones redundantes y actualizar histórico temporal
                 person_boxes = self._separate_overlapping_boxes(person_boxes)
                 self.last_person_boxes = person_boxes
                 tracked = self._update_tracks(person_boxes)
+                # Asociar carros a las personas tracked en este frame de inferencia
+                self._associate_carts(tracked, cart_boxes)
             else:
                 # Utilizar predicciones del fotograma anterior en frames omitidos
                 person_boxes = self.last_person_boxes
                 tracked = self._update_tracks(person_boxes)
+                # En frames omitidos, se conservan los tipos en las trayectorias
 
-            current_counts = {str(i): 0 for i in range(1, 7)}
+            current_counts: Dict[str, List[str]] = {str(i): [] for i in range(1, 7)}
 
             # Procesar pertenencia espacial utilizando preferentemente el histórico de tracks
             if tracked:
@@ -518,15 +580,21 @@ class VisionEngine:
                     for caja_id in self.rois.keys():
                         roi_polygon = self._build_roi_polygon(caja_id)
                         if self._point_in_roi((feet_x, feet_y), roi_polygon):
-                            current_counts[caja_id] += 1
+                            client_type = self.tracks[track_id].get("type", "sinCarro")
+                            current_counts[caja_id].append(client_type)
                             in_any_roi = True
                             break
 
-                    color = (0, 255, 0) if in_any_roi else (200, 200, 200)
+                    color = (0, 255, 0)      # Las cajas de las personas son siempre verdes (requisito de UI)
+                    label = f"ID:{track_id}"
+                    client_type = self.tracks[track_id].get("type", "sinCarro")
+                    if client_type == "conCarro":
+                        label += " + Cart"
+
                     cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
                     cv2.putText(
                         frame,
-                        f"ID:{track_id}",
+                        label,
                         (x1, y1 - 8),
                         cv2.FONT_HERSHEY_SIMPLEX,
                         0.5,
@@ -542,12 +610,47 @@ class VisionEngine:
                     for caja_id in self.rois.keys():
                         roi_polygon = self._build_roi_polygon(caja_id)
                         if self._point_in_roi((feet_x, feet_y), roi_polygon):
-                            current_counts[caja_id] += 1
+                            # Para el fallback, determinar tipo usando self.last_cart_boxes y heurística híbrida
+                            client_type = "sinCarro"
+                            p_center = ((x1 + x2) / 2, (y1 + y2) / 2)
+                            p_feet = (feet_x, feet_y)
+                            for cx1, cy1, cx2, cy2 in getattr(self, "last_cart_boxes", []):
+                                c_center = ((cx1 + cx2) / 2, (cy1 + cy2) / 2)
+                                dist_centers = np.sqrt((p_center[0] - c_center[0])**2 + (p_center[1] - c_center[1])**2)
+                                dist_feet = np.sqrt((p_feet[0] - c_center[0])**2 + (p_feet[1] - c_center[1])**2)
+                                if dist_centers < self.cart_association_threshold or dist_feet < self.cart_association_threshold:
+                                    client_type = "conCarro"
+                                    break
+                            
+                            # Heurística híbrida basada en dimensiones de la caja si no se detectó carro por proximidad
+                            if client_type == "sinCarro":
+                                pw = x2 - x1
+                                ph = y2 - y1
+                                if ph > 0:
+                                    aspect_ratio = pw / ph
+                                    if aspect_ratio > 0.45 or pw > 63:
+                                        client_type = "conCarro"
+
+                            current_counts[caja_id].append(client_type)
                             in_any_roi = True
                             break
 
-                    color = (0, 255, 0) if in_any_roi else (200, 200, 200)
+                    color = (0, 255, 0)      # Las cajas de las personas son siempre verdes (requisito de UI)
                     cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+
+            # Dibujar los carros detectados (para visualización premium bajo el capó)
+            if hasattr(self, "last_cart_boxes"):
+                for cx1, cy1, cx2, cy2 in self.last_cart_boxes:
+                    cv2.rectangle(frame, (cx1, cy1), (cx2, cy2), (0, 165, 255), 1)  # Naranja fino
+                    cv2.putText(
+                        frame,
+                        "Carro",
+                        (cx1, cy1 - 5),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.4,
+                        (0, 165, 255),
+                        1,
+                    )
 
             self.counts = current_counts
 
@@ -595,19 +698,15 @@ class VisionEngine:
         self._terminate()
 
     # Mapea y guarda la instantánea actual del estado de cajas en el gestor de base de datos relacional.
-    def guardar_evento(self, counts: Dict[str, int]) -> None:
+    def guardar_evento(self, counts: Dict[str, List[str]]) -> None:
         """Registra el conteo actual de colas como una instantánea en la base de datos.
 
-        Mapea el número de personas en cada caja al esquema y lo almacena con marca de tiempo.
+        Mapea el desglose tipográfico de cada caja al esquema y lo almacena con marca de tiempo.
 
         Args:
-            counts: Diccionario que asocia el identificador de caja con el conteo de personas detectadas.
+            counts: Diccionario que asocia el identificador de caja con la lista de tipos de cliente ("conCarro"/"sinCarro") detectados.
         """
-        estado_cajas = {}
-        for caja_id, personas in counts.items():
-            estado_cajas[caja_id] = ["sinCarro"] * personas
-
-        self.db.registrar_instantanea(estado_cajas=estado_cajas)
+        self.db.registrar_instantanea(estado_cajas=counts)
 
     # ------------------------------------------------------------------
     # Renderizado de interfaz y visualización
@@ -629,9 +728,11 @@ class VisionEngine:
 
             text_x = roi_polygon[0][0]
             text_y = roi_polygon[0][1] - 10
+            personas = len(self.counts[caja_id])
+            carros = self.counts[caja_id].count("conCarro")
             cv2.putText(
                 frame,
-                f"Caja {caja_id}: {self.counts[caja_id]}",
+                f"Caja {caja_id}: {personas} ({carros} cart)",
                 (text_x, text_y),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.6,
@@ -640,14 +741,15 @@ class VisionEngine:
             )
 
         # Panel superior de información general
-        cv2.rectangle(frame, (15, 10), (475, 45), (0, 0, 0), -1)
-        total_personas = sum(self.counts.values())
+        cv2.rectangle(frame, (15, 10), (510, 45), (0, 0, 0), -1)
+        total_personas = sum(len(cola) for cola in self.counts.values())
+        total_carros = sum(cola.count("conCarro") for cola in self.counts.values())
         cv2.putText(
             frame,
-            f"MSQ - Personas en colas: {total_personas} | FPS: {self.fps}",
+            f"MSQ - Personas: {total_personas} (Carros: {total_carros}) | FPS: {self.fps}",
             (20, 35),
             cv2.FONT_HERSHEY_SIMPLEX,
-            0.7,
+            0.65,
             (0, 255, 0),
             2,
         )

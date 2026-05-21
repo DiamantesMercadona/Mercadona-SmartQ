@@ -156,6 +156,65 @@ class TestVisionEngine(unittest.TestCase):
         self.assertEqual(t_id, 1)
         self.assertEqual(t_box, det_2)
 
+    # --- 7. ASOCIACIÓN DE CARROS Y PERSISTENCIA ---
+    def test_asociacion_y_guardado_carros(self):
+        # 1. Configurar estado interno de trayectorias (tracks)
+        self.engine.tracks = {
+            1: {"box": (10, 10, 50, 100), "misses": 0},
+            2: {"box": (200, 200, 240, 290), "misses": 0}
+        }
+        
+        tracked_people = [
+            (1, (10, 10, 50, 100)),
+            (2, (200, 200, 240, 290))
+        ]
+        
+        # 2. Definir una caja de carro (suitcase) cercana al ID 1 y alejada del ID 2
+        cart_boxes = [(25, 25, 65, 65)]  # Centro: (45, 45) -> Cerca de persona 1
+        
+        # Ejecutar heurística de asociación
+        self.engine._associate_carts(tracked_people, cart_boxes)
+        
+        # Verificar clasificación individual correcta
+        self.assertEqual(self.engine.tracks[1]["type"], "conCarro")
+        self.assertEqual(self.engine.tracks[2]["type"], "sinCarro")
+        
+        # 3. Comprobar guardado de evento con desgloses de tipo en la base de datos
+        mock_counts = {
+            "1": ["sinCarro", "conCarro"],
+            "2": ["sinCarro"]
+        }
+        
+        self.engine.guardar_evento(mock_counts)
+        self.mock_db.return_value.registrar_instantanea.assert_called_once_with(estado_cajas=mock_counts)
+
+    # --- 8. HEURÍSTICA HÍBRIDA DE ASOCIACIÓN POR GEOMETRÍA ---
+    def test_asociacion_carros_heuristica_hibrida(self):
+        # 1. Configurar estado interno de trayectorias (tracks)
+        # Persona 1: Caja ancha (> 63px) -> (10, 10, 80, 100) -> Ancho = 70
+        # Persona 2: Caja con relación de aspecto alta (> 0.45) -> (10, 10, 30, 45) -> W/H = 20/35 = 0.57
+        # Persona 3: Caja estándar -> (10, 10, 40, 110) -> Ancho = 30, W/H = 30/100 = 0.30
+        self.engine.tracks = {
+            1: {"box": (10, 10, 80, 100), "misses": 0},
+            2: {"box": (10, 10, 30, 45), "misses": 0},
+            3: {"box": (10, 10, 40, 110), "misses": 0}
+        }
+        
+        tracked_people = [
+            (1, (10, 10, 80, 100)),
+            (2, (10, 10, 30, 45)),
+            (3, (10, 10, 40, 110))
+        ]
+        
+        # Ejecutar heurística de asociación sin carros detectados físicamente
+        self.engine._associate_carts(tracked_people, [])
+        
+        # Verificar que la heurística clasifique correctamente según la geometría
+        self.assertEqual(self.engine.tracks[1]["type"], "conCarro")
+        self.assertEqual(self.engine.tracks[2]["type"], "conCarro")
+        self.assertEqual(self.engine.tracks[3]["type"], "sinCarro")
+
 
 if __name__ == "__main__":
     unittest.main()
+

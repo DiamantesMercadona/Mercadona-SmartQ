@@ -16,6 +16,7 @@ CONFIG = {
         "yolo_confidence": 0.20,             # Umbral de confianza mínimo de detección (bajar para más recall)
         "yolo_iou": 0.45,                    # Umbral de Intersection over Union (IoU) para Non-Maximum Suppression (NMS)
         "yolo_frame_skip": 1,                # Factor de omisión de fotogramas para inferencia (1 = procesar todos)
+        "cart_association_threshold": 120,   # Umbral de distancia en píxeles para emparejar carros con personas
     },
 
     # ------------------------------------------------------------------
