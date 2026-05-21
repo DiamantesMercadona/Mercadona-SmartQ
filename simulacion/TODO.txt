@@ -1,4 +1,3 @@
-- rotar cajas 90º antihorario
-- añadir mas diversidad de personas (colores de ropa)
-- hacer que las imagenes que aparezcan juntas no sean de colores similares
 - Integracion con el backend
+
+- Mejorar rendimiento de la simulacion, al utilizar el ws se relentiza mucho.

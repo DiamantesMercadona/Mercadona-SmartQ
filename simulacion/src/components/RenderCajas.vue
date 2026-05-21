@@ -74,7 +74,7 @@
 import { ref, onMounted, onBeforeUnmount, computed, watch } from 'vue'
 import './RenderCajas.css'
 import * as THREE from 'three'
-import FrameStreamer from '@/utils/frameStreamer.js'
+import { VideoWS } from '@/services/backendApi.js'
 import { createVideoRecorder } from '@/utils/videoRecorder.js'
 
 import { crearFondoEscena, crearSuelo, crearLuces } from '@/composables/useSceneSetup.js'
@@ -114,7 +114,7 @@ const refEspaciales = useReferenciasEspaciales(SUELO_LARGO, SUELO_ANCHO)
 
 let scene, camera, renderer, animationId, cajaModelo, camControls, videoRecorder
 const cajasMesh = []
-const frameStreamer = new FrameStreamer()
+const frameStreamer = new VideoWS()
 
 const recordingElapsedLabel = computed(() => {
   const m = Math.floor(recordingElapsedSeconds.value / 60)
@@ -163,8 +163,9 @@ async function init() {
 
   if (saveFrames.value) {
     frameStreamer
-      .startStreaming(renderer, 10)
-      .catch((e) => console.error('FrameStreamer error:', e))
+      .connect()
+      .then(() => frameStreamer.startStreaming(renderer, 10))
+      .catch((e) => console.error('[VideoWS] Error al conectar:', e))
   }
   window.addEventListener('resize', onResize)
 }
@@ -250,9 +251,10 @@ watch(saveFrames, async (val) => {
   if (val) {
     if (!renderer) return
     try {
-      await frameStreamer.startStreaming(renderer, 10)
+      await frameStreamer.connect()
+      frameStreamer.startStreaming(renderer, 10)
     } catch (e) {
-      console.error('No se pudo iniciar FrameStreamer:', e)
+      console.error('[VideoWS] No se pudo conectar:', e)
       saveFrames.value = false
     }
   } else {
