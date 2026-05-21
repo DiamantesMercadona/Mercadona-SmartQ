@@ -30,7 +30,7 @@ class Caja {
 
   agregarCliente() {
     if (!this.abierta) return null
-    const cliente = new Cliente()
+    const cliente = new Cliente(this.cola)
     this.cola.push(cliente)
     return cliente
   }

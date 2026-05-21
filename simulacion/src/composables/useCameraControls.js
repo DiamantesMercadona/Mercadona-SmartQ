@@ -2,8 +2,6 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { POSICIONES_CAMARA } from './camarasConfig.js'
 
-export { POSICIONES_CAMARA } from './camarasConfig.js'
-
 const CAMERA_SPEED = 0.12
 
 export function initCameraControls(camera, renderer, initialMode) {

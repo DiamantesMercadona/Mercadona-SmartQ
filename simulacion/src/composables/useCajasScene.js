@@ -63,7 +63,7 @@ function startAnimation(mesh, from, to, speed, easing, onComplete) {
 
 function computeClientPos(i) {
   const side = i % 2 === 0 ? -0.55 : 0.55
-  return new THREE.Vector3(1.2 + side + Math.sin(i * 2.3) * 0.12, 1.5, 2.4 + i * 1.8)
+  return new THREE.Vector3(3.2 + side + Math.sin(i * 2.3) * 0.12, 1.5, 2.4 + i * 1.8)
 }
 
 // ─── Character creators ────────────────────────────────────────────────────────
@@ -195,11 +195,14 @@ function crearCajaGrupo(caja, x, cajaModelo) {
   grupo.userData.caja = caja
   grupo.userData.clientes = []
 
-  grupo.add(cajaModelo.clone())
+  const mesh = cajaModelo.clone()
+  mesh.rotation.y = Math.PI / 2
+  grupo.add(mesh)
 
   if (caja.dependiente) {
     const dep = crearDependiente(caja.dependiente)
-    dep.position.set(1, 0, 0)
+    dep.position.set(0.4, 0, -1.3)
+    dep.rotation.y = Math.PI / 2
     grupo.add(dep)
     grupo.userData.dependiente = dep
   } else {
@@ -244,7 +247,8 @@ export function syncScene(cajas, cajasMesh) {
     const depActual = grupo.userData.dependiente
     if (caja.dependiente && !depActual) {
       const dep = crearDependiente(caja.dependiente)
-      dep.position.set(1, 0, 0)
+      dep.position.set(0.4, 0, -1.3)
+      dep.rotation.y = Math.PI / 2
       grupo.add(dep)
       grupo.userData.dependiente = dep
     } else if (!caja.dependiente && depActual) {

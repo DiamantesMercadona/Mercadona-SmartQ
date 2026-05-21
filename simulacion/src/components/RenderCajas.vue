@@ -88,7 +88,7 @@ import {
   simulationSpeed,
 } from '@/composables/useCajasScene.js'
 import { initCameraControls } from '@/composables/useCameraControls.js'
-import { POSICIONES_CAMARA } from '@/composables/camarasConfig.js'
+import { POSICIONES_CAMARA, CAMARA_POR_DEFECTO } from '@/composables/camarasConfig.js'
 import { useReferenciasEspaciales } from '@/composables/useReferenciasEspaciales.js'
 
 const SUELO_LARGO = 40
@@ -104,7 +104,7 @@ const cajas = computed(() => props.simulacion?.cajas ?? [])
 const saveFrames = ref(false)
 const isRecordingVideo = ref(false)
 const recordingElapsedSeconds = ref(0)
-const cameraMode = ref('libre')
+const cameraMode = ref(CAMARA_POR_DEFECTO)
 const mostrarReferenciasEspaciales = ref(false)
 const mostrarLabels = ref(false)
 const posicionCopiada = ref(false)
