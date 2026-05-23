@@ -5,6 +5,9 @@ from .get_endpoints import router as get_router
 from .post_endpoints import router as post_router
 from .video_endpoints import router as video_router
 
+#PODRIA GENERAR PROBLEMAS
+#from backend.iot.routes import router as iot_router
+
 # Inicializar la base de datos
 init_db()
 
@@ -12,6 +15,12 @@ app = FastAPI(
     title="Mercadona Queue API",
     description="API para acceder al estado de las colas"
 )
+
+# si el broker no esta activo podría generar dependencias con MQTT.
+#app.include_router(iot_router, prefix="/api/v1", tags=["IoT MQTT"])
+#para hacer uso de:
+#/api/v1/vibrar/{id_pulsera}
+#/api/v1/display
 
 # Rutas GET
 app.include_router(get_router, prefix="/api/v1", tags=["GET Endpoints"])
