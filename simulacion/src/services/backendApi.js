@@ -205,7 +205,7 @@ export class VideoWS {
 
     const srcCanvas = canvasOrRenderer?.domElement ?? canvasOrRenderer
 
-    //  Fase 1: captura asíncrona (sin bloquear main thread) 
+    //  Fase 1: captura asíncrona (sin bloquear main thread)
     this.#capturing = true
     let imageBitmap
     try {
@@ -228,7 +228,7 @@ export class VideoWS {
       return
     }
 
-    //  Fase 2: enviar al worker (zero-copy transfer) 
+    //  Fase 2: enviar al worker (zero-copy transfer)
     this.#encoding = true
     this.#worker.postMessage(
       {

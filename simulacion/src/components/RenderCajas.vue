@@ -5,7 +5,7 @@
   <div class="controls-panel">
     <label>
       Velocidad: <strong>{{ simulationSpeed.toFixed(2) }}x</strong>
-      <input type="range" v-model.number="simulationSpeed" min="0.25" max="5" step="0.25" />
+      <input type="range" v-model.number="simulationSpeed" min="0.5" max="20" step="0.5" />
     </label>
     <label>
       Cámara:
@@ -32,6 +32,7 @@
     </button>
     <span v-if="isRecordingVideo" class="recording-time">{{ recordingElapsedLabel }}</span>
     <button @click="downloadFrame" class="btn-download">Descargar frame</button>
+    <RouterLink to="/backendTest" class="btn-backend-test">Backend test</RouterLink>
   </div>
 
   <!-- Tooltips for cajas -->
@@ -72,6 +73,7 @@
 
 <script setup>
 import { ref, onMounted, onBeforeUnmount, computed, watch } from 'vue'
+import { RouterLink } from 'vue-router'
 import './RenderCajas.css'
 import * as THREE from 'three'
 import { VideoWS } from '@/services/backendApi.js'
@@ -85,8 +87,8 @@ import {
   renderizarCajas,
   syncScene,
   tickAnimations,
-  simulationSpeed,
 } from '@/composables/useCajasScene.js'
+import { simulationSpeed } from '@/models/simulacionConfig.js'
 import { initCameraControls } from '@/composables/useCameraControls.js'
 import { POSICIONES_CAMARA, CAMARA_POR_DEFECTO } from '@/composables/camarasConfig.js'
 import { useReferenciasEspaciales } from '@/composables/useReferenciasEspaciales.js'
@@ -94,7 +96,7 @@ import { useReferenciasEspaciales } from '@/composables/useReferenciasEspaciales
 const SUELO_LARGO = 40
 const SUELO_ANCHO = 32
 
-const FPS_SEND_RENDER = 24  // En ls retransmisión solo llega a 10 qunque lo pongamos 24. 
+const FPS_SEND_RENDER = 24 // En ls retransmisión solo llega a 10 qunque lo ponga 24.
 
 const VIDEO_RECORDING_FPS = 30
 
@@ -226,7 +228,10 @@ function downloadFrame() {
 
 function toggleVideoRecording() {
   if (!videoRecorder && renderer) {
-    videoRecorder = createVideoRecorder(renderer, { fps: VIDEO_RECORDING_FPS, filenamePrefix: 'render' })
+    videoRecorder = createVideoRecorder(renderer, {
+      fps: VIDEO_RECORDING_FPS,
+      filenamePrefix: 'render',
+    })
   }
   if (isRecordingVideo.value) {
     videoRecorder?.stop()

@@ -109,6 +109,31 @@
   }
 }
 
+.btn-backend-test {
+  padding: 8px 14px;
+  background: linear-gradient(90deg, #0ea5e9, #0284c7);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.12s ease;
+  box-shadow: 0 6px 18px rgba(14, 165, 233, 0.22);
+}
+
+.btn-backend-test:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 26px rgba(14, 165, 233, 0.35);
+}
+
+.btn-backend-test:active {
+  transform: translateY(0);
+}
+
 .camera-pos-panel {
   position: fixed;
   top: 80px;

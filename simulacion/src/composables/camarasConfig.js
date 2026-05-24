@@ -11,12 +11,8 @@ export const POSICIONES_CAMARA = {
     position: new THREE.Vector3(-0.34, 13.28, 14.83),
     lookAt: new THREE.Vector3(0.22, 0.0, -1.76),
   },
-  frontal_2: {
-    position: new THREE.Vector3(-0.02, 17.62, 10.13),
-    lookAt: new THREE.Vector3(0.22, 0.0, -1.76),
-  },
-  cenital: {
-    position: new THREE.Vector3(0.49, 26.94, 3.62),
-    lookAt: new THREE.Vector3(0.53, 0.0, -1.77),
-  },
+  // cenital: {
+  //   position: new THREE.Vector3(0.49, 26.94, 3.62),
+  //   lookAt: new THREE.Vector3(0.53, 0.0, -1.77),
+  // },
 }

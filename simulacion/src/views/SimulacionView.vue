@@ -22,10 +22,6 @@
       <div class="ui-row">
         <button type="button" @click="abrirCajaUI">Abrir</button>
         <button type="button" @click="cerrarCajaUI">Cerrar</button>
-        <button type="button" @click="agregarClienteUI" :disabled="!currentCaja?.abierta">
-          + Cliente
-        </button>
-        <button type="button" @click="removerClienteUI">− Cliente</button>
       </div>
     </div>
   </div>
@@ -79,16 +75,6 @@ function abrirCajaUI() {
 function cerrarCajaUI() {
   if (!simulacion.value) return
   simulacion.value.cerrarCaja(selectedCajaId.value)
-}
-
-function agregarClienteUI() {
-  if (!simulacion.value) return
-  simulacion.value.agregarCliente(selectedCajaId.value)
-}
-
-function removerClienteUI() {
-  if (!simulacion.value) return
-  simulacion.value.removerCliente(selectedCajaId.value)
 }
 </script>
 

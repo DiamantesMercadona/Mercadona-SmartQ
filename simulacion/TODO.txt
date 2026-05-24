@@ -1,3 +1,8 @@
-- Integracion con el backend
+- Modifcar los setTimeout para que los que ya esten creados se modifiquen cnado cambias la velocidad de la simulacion.
+- O pcion B: simplemente dejar los tiempos como estan y poner el slider por defecto a 20 o un valor alto.
 
-- Mejorar rendimiento de la simulacion, al utilizar el ws se relentiza mucho.
+- Usar estado de las cajas del backend
+
+- Mejorar rendimiento de la simulacion (ma o menos va a 10 fps)
+
+- Limpiar el codigo, eliminar cosas que no se usan
