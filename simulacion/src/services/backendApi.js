@@ -89,34 +89,70 @@ function buildWsUrl(path) {
   return `${wsBase}${API_PREFIX}${path}`
 }
 
-
 /**
  * VideoWS
  *
  * Conecta a /ws/video y envía frames JPEG binarios extraídos de un <canvas>.
  * Pensado para hacer streaming del render 3D (o cualquier canvas) al backend.
  *
- * Uso:
- *   import { videoWS } from '@/services/backendApi.js'
+ * La codificación JPEG se delega a un Web Worker (frameEncoder.worker.js) para
+ * no bloquear el hilo principal ni interferir con el loop de render de Three.js.
  *
- *   videoWS.onStatusChange = (s) => console.log('VideoWS:', s)
- *   await videoWS.connect()
- *   videoWS.startStreaming(canvasElement, 10)  // 10 FPS
- *   videoWS.stopStreaming()
- *   videoWS.disconnect()
+ * Flujo por frame:
+ *   1. rAF loop (main)  → time-gate a fps objetivo
+ *   2. createImageBitmap(canvas, { resize })  → async, no bloquea main thread
+ *   3. postMessage(imageBitmap) → Worker  (zero-copy transfer)
+ *   4. Worker: drawImage + convertToBlob → postMessage(ArrayBuffer)  (zero-copy)
+ *   5. Main thread: socket.send(buffer)  (~0 ms de trabajo en main)
+ *
+ * Uso:
+ *   const ws = new VideoWS()
+ *   ws.onStatusChange = (s) => console.log('VideoWS:', s)
+ *   await ws.connect()
+ *   ws.startStreaming(renderer, 24)   // 24 FPS, captura a 960 px de ancho
+ *   ws.stopStreaming()
+ *   ws.disconnect()
  */
 export class VideoWS {
   /** @type {'idle'|'connecting'|'connected'|'error'|'disconnected'} */
   status = 'idle'
 
   #socket = null
-  #streamInterval = null
+  #rafId = null
+  #lastFrameTime = 0
+
+  // Worker para codificación JPEG off-thread
+  #worker = null
+  // true mientras createImageBitmap está en vuelo
+  #capturing = false
+  // true mientras el worker está codificando
+  #encoding = false
+  // Dimensiones de captura (calculadas en startStreaming)
+  #captureWidth = 960
+  #captureHeight = 540
 
   /** Llamado cuando cambia el estado de la conexión WS. */
   onStatusChange = null
 
   get isConnected() {
     return this.#socket?.readyState === WebSocket.OPEN
+  }
+
+  /** Instancia (lazy) el worker de codificación. */
+  #initWorker() {
+    if (this.#worker) return
+    this.#worker = new Worker(new URL('../workers/frameEncoder.worker.js', import.meta.url), {
+      type: 'module',
+    })
+    this.#worker.onmessage = ({ data }) => {
+      this.#encoding = false
+      if (data.buffer && this.isConnected) {
+        this.#socket.send(data.buffer)
+      }
+    }
+    this.#worker.onerror = () => {
+      this.#encoding = false
+    }
   }
 
   connect() {
@@ -153,45 +189,102 @@ export class VideoWS {
     this.stopStreaming()
     this.#socket?.close()
     this.#socket = null
+    // El worker se mantiene vivo para poder reutilizarlo en reconexiones
   }
 
   /**
-   * Captura el canvas como JPEG y lo envía por WebSocket.
-   * Compatible con HTMLCanvasElement o cualquier objeto con .domElement (THREE.WebGLRenderer).
+   * Captura el canvas actual y lo envía al worker para codificarlo.
+   * Async pero fire-and-forget: el rAF loop no espera su resolución.
+   * Los flags #capturing / #encoding evitan ejecuciones solapadas.
    * @param {HTMLCanvasElement|{domElement: HTMLCanvasElement}} canvasOrRenderer
    */
-  sendFrame(canvasOrRenderer) {
-    if (!this.isConnected) return
-    const canvas = canvasOrRenderer?.domElement ?? canvasOrRenderer
-    canvas.toBlob(
-      (blob) => {
-        if (!blob || !this.isConnected) return
-        blob.arrayBuffer().then((buffer) => {
-          if (this.isConnected) this.#socket.send(buffer)
-        })
+  async sendFrame(canvasOrRenderer) {
+    if (!this.isConnected || this.#capturing || this.#encoding) return
+    // Backpressure: descartamos el frame si el socket tiene > 256 KB pendientes
+    if (this.#socket.bufferedAmount > 256 * 1024) return
+
+    const srcCanvas = canvasOrRenderer?.domElement ?? canvasOrRenderer
+
+    //  Fase 1: captura asíncrona (sin bloquear main thread) 
+    this.#capturing = true
+    let imageBitmap
+    try {
+      // createImageBitmap hace el resize en GPU/compositor, no en CPU.
+      // El await libera el main thread mientras espera → Three.js sigue renderizando.
+      imageBitmap = await createImageBitmap(srcCanvas, {
+        resizeWidth: this.#captureWidth,
+        resizeHeight: this.#captureHeight,
+        resizeQuality: 'low',
+      })
+    } catch {
+      this.#capturing = false
+      return
+    }
+    this.#capturing = false
+
+    // Comprobar estado de nuevo tras el await (pudo cambiar mientras esperábamos)
+    if (!this.isConnected || this.#encoding) {
+      imageBitmap.close()
+      return
+    }
+
+    //  Fase 2: enviar al worker (zero-copy transfer) 
+    this.#encoding = true
+    this.#worker.postMessage(
+      {
+        imageBitmap,
+        width: this.#captureWidth,
+        height: this.#captureHeight,
+        quality: 0.7,
       },
-      'image/jpeg',
-      0.5,
+      [imageBitmap], // transferir ownership → sin copia de píxeles
     )
   }
 
   /**
    * Inicia el envío periódico de frames.
+   * Usa requestAnimationFrame para sincronizar con el ciclo de render del navegador.
+   * La captura se reduce automáticamente a maxCaptureWidth píxeles de ancho
+   * manteniendo el aspect ratio del canvas fuente.
+   *
    * @param {HTMLCanvasElement|{domElement: HTMLCanvasElement}} canvasOrRenderer
-   * @param {number} fps - Fotogramas por segundo (defecto: 10)
+   * @param {number} fps              - FPS objetivo (defecto: 24)
+   * @param {number} maxCaptureWidth  - Ancho máximo de captura (defecto: 960)
    */
-  startStreaming(canvasOrRenderer, fps = 10) {
+  startStreaming(canvasOrRenderer, fps = 24, maxCaptureWidth = 960) {
     this.stopStreaming()
-    const ms = 1000 / fps
-    this.#streamInterval = setInterval(() => this.sendFrame(canvasOrRenderer), ms)
+    this.#initWorker()
+
+    // Calcular dimensiones de captura respetando el aspect ratio
+    const srcCanvas = canvasOrRenderer?.domElement ?? canvasOrRenderer
+    const scale = Math.min(1, maxCaptureWidth / (srcCanvas.width || maxCaptureWidth))
+    this.#captureWidth = Math.round((srcCanvas.width || maxCaptureWidth) * scale)
+    this.#captureHeight = Math.round((srcCanvas.height || 540) * scale)
+
+    const intervalMs = 1000 / fps
+    this.#lastFrameTime = 0
+    this.#capturing = false
+    this.#encoding = false
+
+    const loop = (timestamp) => {
+      this.#rafId = requestAnimationFrame(loop)
+      // Time-gating: solo iniciamos una captura si ha pasado suficiente tiempo
+      if (timestamp - this.#lastFrameTime < intervalMs) return
+      this.#lastFrameTime = timestamp
+      this.sendFrame(canvasOrRenderer) // async, fire-and-forget
+    }
+
+    this.#rafId = requestAnimationFrame(loop)
   }
 
-  /** Detiene el envío de frames sin cerrar la conexión. */
+  /** Detiene el envío de frames sin cerrar la conexión ni destruir el worker. */
   stopStreaming() {
-    if (this.#streamInterval) {
-      clearInterval(this.#streamInterval)
-      this.#streamInterval = null
+    if (this.#rafId !== null) {
+      cancelAnimationFrame(this.#rafId)
+      this.#rafId = null
     }
+    this.#capturing = false
+    this.#encoding = false
   }
 
   #setStatus(s) {

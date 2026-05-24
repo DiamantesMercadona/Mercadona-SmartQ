@@ -94,6 +94,10 @@ import { useReferenciasEspaciales } from '@/composables/useReferenciasEspaciales
 const SUELO_LARGO = 40
 const SUELO_ANCHO = 32
 
+const FPS_SEND_RENDER = 24  // En ls retransmisión solo llega a 10 qunque lo pongamos 24. 
+
+const VIDEO_RECORDING_FPS = 30
+
 const props = defineProps({
   simulacion: { type: Object, default: null },
 })
@@ -164,7 +168,7 @@ async function init() {
   if (saveFrames.value) {
     frameStreamer
       .connect()
-      .then(() => frameStreamer.startStreaming(renderer, 10))
+      .then(() => frameStreamer.startStreaming(renderer, FPS_SEND_RENDER))
       .catch((e) => console.error('[VideoWS] Error al conectar:', e))
   }
   window.addEventListener('resize', onResize)
@@ -222,7 +226,7 @@ function downloadFrame() {
 
 function toggleVideoRecording() {
   if (!videoRecorder && renderer) {
-    videoRecorder = createVideoRecorder(renderer, { fps: 30, filenamePrefix: 'render' })
+    videoRecorder = createVideoRecorder(renderer, { fps: VIDEO_RECORDING_FPS, filenamePrefix: 'render' })
   }
   if (isRecordingVideo.value) {
     videoRecorder?.stop()
@@ -252,7 +256,7 @@ watch(saveFrames, async (val) => {
     if (!renderer) return
     try {
       await frameStreamer.connect()
-      frameStreamer.startStreaming(renderer, 10)
+      frameStreamer.startStreaming(renderer, FPS_SEND_RENDER)
     } catch (e) {
       console.error('[VideoWS] No se pudo conectar:', e)
       saveFrames.value = false
