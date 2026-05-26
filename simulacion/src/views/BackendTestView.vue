@@ -2,80 +2,28 @@
   <div class="test-view">
     <h2>Backend Test</h2>
 
-    <!-- GET /queues -->
-    <section>
-      <h3>GET /queues</h3>
-      <p class="description">Obtiene todas las colas del sistema</p>
-      <button @click="testGetQueues">Ejecutar</button>
-    </section>
-
-    <!-- GET /queues/:id -->
-    <section>
-      <h3>GET /queues/:id</h3>
-      <p class="description">Obtiene el estado de una cola por ID</p>
-      <label>
-        ID de cola
-        <input v-model.number="queueId" type="number" min="1" placeholder="1" />
-      </label>
-      <button @click="testGetQueue">Ejecutar</button>
-    </section>
-
-    <!-- POST /queues/:id -->
-    <section>
-      <h3>POST /queues/:id</h3>
-      <p class="description">Actualiza la longitud y estado de una cola</p>
-      <label>
-        ID de cola
-        <input v-model.number="updateId" type="number" min="1" placeholder="1" />
-      </label>
-      <label>
-        Longitud
-        <input v-model.number="updateLength" type="number" min="0" placeholder="0" />
-      </label>
-      <label>
-        Estado
-        <select v-model="updateStatus">
-          <option value="activa">activa</option>
-          <option value="cerrada">cerrada</option>
-        </select>
-      </label>
-      <button @click="testUpdateQueue">Ejecutar</button>
-    </section>
-
-    <!-- POST /video/events -->
-    <section>
-      <h3>POST /video/events</h3>
-      <p class="description">Publica un evento de video con el estado de una caja</p>
-      <label>
-        ID de caja
-        <input v-model.number="eventCajaId" type="number" min="1" placeholder="1" />
-      </label>
-      <label>
-        Personas en cola
-        <input v-model.number="eventPeople" type="number" min="0" placeholder="0" />
-      </label>
-      <label>
-        Estado
-        <select v-model="eventStatus">
-          <option value="activa">activa</option>
-          <option value="cerrada">cerrada</option>
-        </select>
-      </label>
-      <button @click="testVideoEvent">Ejecutar</button>
-    </section>
-
-    <!-- GET /video/events/latest -->
-    <section>
-      <h3>GET /video/events/latest</h3>
-      <p class="description">Obtiene el ultimo evento de video almacenado en Redis</p>
-      <button @click="testGetLatestVideo">Ejecutar</button>
-    </section>
-
-    <!-- GET /redis/health -->
-    <section>
-      <h3>GET /redis/health</h3>
-      <p class="description">Comprueba la conexion con Redis</p>
-      <button @click="testHealth">Ejecutar</button>
+    <!-- Control de cajas -->
+    <section class="cajas-section">
+      <h3>PATCH /cajas/:id — Control de cajas</h3>
+      <p class="description">
+        Abre o cierra cajas directamente en el backend. La simulación refleja los cambios
+        automáticamente en el siguiente ciclo de refresco.
+      </p>
+      <button @click="cargarCajas">Refrescar</button>
+      <div class="cajas-list">
+        <div v-for="caja in cajas" :key="caja.id" class="caja-row">
+          <span class="caja-id">Caja {{ caja.id }}</span>
+          <span class="estado-dot" :class="caja.estado" :title="caja.estado"></span>
+          <span class="estado-label">{{ caja.estado }}</span>
+          <button :disabled="caja.estado === 'activa'" @click="setCajaEstado(caja.id, 'activa')">
+            Abrir
+          </button>
+          <button :disabled="caja.estado === 'cerrada'" @click="setCajaEstado(caja.id, 'cerrada')">
+            Cerrar
+          </button>
+        </div>
+        <p v-if="cajas.length === 0" class="empty">Sin cajas cargadas</p>
+      </div>
     </section>
 
     <!-- WS /ws/video/events -->
@@ -96,25 +44,33 @@
 </template>
 
 <script setup>
-import { ref, computed, onUnmounted } from 'vue'
-import {
-  getQueues,
-  getQueue,
-  updateQueue,
-  publishVideoEvent,
-  checkHealth,
-  getLatestVideoEvent,
-} from '../services/backendApi.js'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { getCajas, patchCajaEstado } from '../services/backendApi.js'
 
-const queueId = ref(1)
-const updateId = ref(1)
-const updateLength = ref(0)
-const updateStatus = ref('activa')
-const eventCajaId = ref(1)
-const eventPeople = ref(0)
-const eventStatus = ref('activa')
+//  Cajas
 
-// Video viewer
+const cajas = ref([])
+
+async function cargarCajas() {
+  try {
+    cajas.value = await getCajas()
+  } catch (e) {
+    console.error('[GET /cajas]', e)
+  }
+}
+
+async function setCajaEstado(id, estado) {
+  try {
+    await patchCajaEstado(id, estado)
+    await cargarCajas()
+  } catch (e) {
+    console.error(`[PATCH /cajas/${id}]`, e)
+  }
+}
+
+onMounted(cargarCajas)
+
+//  Video viewer
 const viewerCanvas = ref(null)
 const viewerStatus = ref('idle')
 const frameCount = ref(0)
@@ -210,62 +166,6 @@ function toggleVideoViewer() {
 }
 
 onUnmounted(disconnectVideoViewer)
-
-async function testGetQueues() {
-  try {
-    console.log('[GET /queues]', await getQueues())
-  } catch (e) {
-    console.error('[GET /queues]', e)
-  }
-}
-
-async function testGetQueue() {
-  try {
-    console.log(`[GET /queues/${queueId.value}]`, await getQueue(queueId.value))
-  } catch (e) {
-    console.error(`[GET /queues/${queueId.value}]`, e)
-  }
-}
-
-async function testUpdateQueue() {
-  try {
-    console.log(
-      `[POST /queues/${updateId.value}]`,
-      await updateQueue(updateId.value, updateLength.value, updateStatus.value),
-    )
-  } catch (e) {
-    console.error(`[POST /queues/${updateId.value}]`, e)
-  }
-}
-
-async function testVideoEvent() {
-  try {
-    console.log(
-      '[POST /video/events]',
-      await publishVideoEvent(eventCajaId.value, eventPeople.value, eventStatus.value),
-    )
-  } catch (e) {
-    console.error('[POST /video/events]', e)
-  }
-}
-
-async function testGetLatestVideo() {
-  try {
-    const data = await getLatestVideoEvent()
-    const text = new TextDecoder().decode(data)
-    console.log('[GET /video/events/latest]', JSON.parse(text))
-  } catch (e) {
-    console.error('[GET /video/events/latest]', e)
-  }
-}
-
-async function testHealth() {
-  try {
-    console.log('[GET /redis/health]', await checkHealth())
-  } catch (e) {
-    console.error('[GET /redis/health]', e)
-  }
-}
 </script>
 
 <style scoped>
@@ -302,25 +202,6 @@ h3 {
   color: #555;
 }
 
-label {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 11px;
-  color: #aaa;
-}
-
-input,
-select {
-  padding: 4px 8px;
-  border: 1px solid #444;
-  border-radius: 4px;
-  background: #1e1e1e;
-  color: #eee;
-  font-size: 13px;
-  width: 100px;
-}
-
 button {
   padding: 4px 14px;
   border: 1px solid #555;
@@ -334,6 +215,61 @@ button {
 
 button:hover {
   background: #3d3d3d;
+}
+
+.cajas-section {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.cajas-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+  width: 100%;
+}
+
+.caja-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.caja-id {
+  width: 56px;
+  font-size: 12px;
+  color: #ccc;
+}
+
+.estado-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: #6b7280;
+}
+
+.estado-dot.activa {
+  background: #10b981;
+  box-shadow: 0 0 5px rgba(16, 185, 129, 0.7);
+}
+
+.estado-dot.cerrada {
+  background: #ef4444;
+  box-shadow: 0 0 5px rgba(239, 68, 68, 0.5);
+}
+
+.estado-label {
+  width: 52px;
+  font-size: 11px;
+  color: #888;
+}
+
+.empty {
+  font-size: 11px;
+  color: #555;
+  margin: 0;
 }
 
 .viewer-section {

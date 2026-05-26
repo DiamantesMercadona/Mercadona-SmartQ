@@ -18,67 +18,28 @@ const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 })
 
-// Endpoints GET
+//  REST
 
-/** Obtiene el estado de todas las colas. */
-export const getQueues = () => api.get('/queues').then((r) => r.data)
-
-/** Obtiene el estado de una cola por ID. */
-export const getQueue = (id) => api.get(`/queues/${id}`).then((r) => r.data)
-
-/** Comprueba la conexión con Redis. */
-export const checkHealth = () => api.get('/redis/health').then((r) => r.data)
+/** Obtiene la lista de cajas con su estado actual. */
+export const getCajas = () => api.get('/cajas').then((r) => r.data.cajas)
 
 /**
- * Obtiene el último evento de vídeo almacenado en Redis.
- * Devuelve un ArrayBuffer porque el backend lo sirve como octet-stream.
+ * Obtiene las colas con estado y longitud actual (número de clientes).
+ * La longitud se calcula a partir de la última instantánea registrada en el backend.
+ * Usado solo en la inicialización de la simulación para poblar las colas.
  */
-export const getLatestVideoEvent = () =>
-  api.get('/video/events/latest', { responseType: 'arraybuffer' }).then((r) => r.data)
-
-// Endpoints POST
+export const getQueues = () => api.get('/queues').then((r) => r.data.queues ?? [])
 
 /**
- * Actualiza la longitud y el estado de una cola.
+ * Actualiza únicamente el estado de una caja.
+ * Usa PATCH /cajas/:id con solo el campo `estado`.
  * @param {string|number} id
- * @param {number} length
- * @param {'activa'|'cerrada'} status
+ * @param {'activa'|'cerrada'} estado
  */
-export const updateQueue = (id, length, status) =>
-  api.post(`/queues/${id}`, { length, status }).then((r) => r.data)
+export const patchCajaEstado = (id, estado) =>
+  api.patch(`/cajas/${id}`, { estado }).then((r) => r.data)
 
-/**
- * Publica un evento de vídeo (estado de una caja) en Redis vía HTTP.
- * @param {string|number} cajaId
- * @param {number} peopleCount
- * @param {'activa'|'cerrada'} status
- */
-export const publishVideoEvent = (cajaId, peopleCount, status = 'activa') =>
-  api
-    .post('/video/events', {
-      camera_id: 'simulador-3d',
-      zone: `Caja_${cajaId}`,
-      people_count: peopleCount,
-      metadata: { status },
-    })
-    .then((r) => r.data)
-
-// Sync helper - publicación masiva del estado de una Simulacion vía HTTP
-
-/**
- * Publica el estado de todas las cajas de una Simulacion como eventos de vídeo.
- * @param {import('../models/Simulacion.js').default} simulacion
- * @returns {Promise<PromiseSettledResult[]>}
- */
-export async function syncSimulacion(simulacion) {
-  return Promise.allSettled(
-    simulacion.cajas.map((c) =>
-      publishVideoEvent(c.id, c.cola.length, c.abierta ? 'activa' : 'cerrada'),
-    ),
-  )
-}
-
-// WebSocket
+//  WebSocket
 
 function buildWsUrl(path) {
   // Los WebSockets se conectan directamente al backend, sin pasar por el proxy
@@ -292,6 +253,3 @@ export class VideoWS {
     this.onStatusChange?.(s)
   }
 }
-
-/** Instancia singleton lista para usar en cualquier componente. */
-export const videoWS = new VideoWS()
