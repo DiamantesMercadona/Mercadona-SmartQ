@@ -1,7 +1,19 @@
 from fastapi import APIRouter, HTTPException, Query
 from typing import Annotated
+import sys
+from pathlib import Path
 
-from .database import DatabaseMSQ, get_queues
+# Agregar el directorio backend al path
+BACKEND_DIR = Path(__file__).resolve().parent.parent
+if str(BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(BACKEND_DIR))
+
+from database import DatabaseMSQ
+
+try:
+    from .db_helpers import get_queues
+except ImportError:
+    from db_helpers import get_queues
 
 router = APIRouter()
 

@@ -1,12 +1,25 @@
 import sqlite3
 from datetime import datetime, timezone
 from typing import Any
+import sys
+from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Response, status
 from pydantic import BaseModel, Field
 
-from .database import DatabaseMSQ, update_queue
-from .redis_client import set_bytes, publish_bytes
+# Agregar el directorio backend al path
+BACKEND_DIR = Path(__file__).resolve().parent.parent
+if str(BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(BACKEND_DIR))
+
+from database import DatabaseMSQ
+
+try:
+    from .db_helpers import update_queue
+    from .redis_client import set_bytes, publish_bytes
+except ImportError:
+    from db_helpers import update_queue
+    from redis_client import set_bytes, publish_bytes
 
 router = APIRouter()
 
