@@ -98,6 +98,13 @@ const SUELO_ANCHO = 32
 
 const FPS_SEND_RENDER = 24
 
+// Resolución fija de renderización — debe coincidir con el vídeo de demo (3d_demo.webm).
+// El buffer del renderer siempre se mantiene a esta resolución para que los frames
+// enviados al backend por WebSocket sean idénticos al vídeo de referencia.
+// CSS escala el canvas para que llene el contenedor sin cambiar el buffer.
+const RENDER_WIDTH = 1904
+const RENDER_HEIGHT = 935
+
 const VIDEO_RECORDING_FPS = 30
 
 const props = defineProps({
@@ -132,16 +139,15 @@ async function init() {
   scene = new THREE.Scene()
   scene.background = crearFondoEscena()
 
-  camera = new THREE.PerspectiveCamera(
-    55,
-    container.value.clientWidth / container.value.clientHeight,
-    0.1,
-    100,
-  )
+  // Aspecto fijo: coincide con RENDER_WIDTH/RENDER_HEIGHT para coherencia con el backend
+  camera = new THREE.PerspectiveCamera(55, RENDER_WIDTH / RENDER_HEIGHT, 0.1, 100)
   camera.position.copy(POSICIONES_CAMARA[cameraMode.value].position)
 
   renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true })
-  renderer.setSize(container.value.clientWidth, container.value.clientHeight)
+  // Buffer fijo a RENDER_WIDTH×RENDER_HEIGHT; CSS llena el contenedor sin cambiar el buffer
+  renderer.setSize(RENDER_WIDTH, RENDER_HEIGHT)
+  renderer.domElement.style.width = '100%'
+  renderer.domElement.style.height = '100%'
   renderer.shadowMap.enabled = true
   container.value.appendChild(renderer.domElement)
 
@@ -191,10 +197,10 @@ function animate() {
 }
 
 function onResize() {
-  if (!container.value) return
-  camera.aspect = container.value.clientWidth / container.value.clientHeight
-  camera.updateProjectionMatrix()
-  renderer.setSize(container.value.clientWidth, container.value.clientHeight)
+  // El buffer del renderer es fijo (RENDER_WIDTH×RENDER_HEIGHT); solo el CSS cambia de tamaño.
+  // La cámara mantiene el aspect ratio de renderización para coherencia con el backend.
+  // No hay nada que actualizar: el canvas ya tiene width/height en 100% y el contenedor
+  // absorbe el resize del navegador.
 }
 
 function copiarPosicionCamara() {
