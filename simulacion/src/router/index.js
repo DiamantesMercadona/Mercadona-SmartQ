@@ -13,9 +13,9 @@ const router = createRouter({
       component: () => import('../views/SimulacionView.vue'),
     },
     {
-      path: '/backendTest',
-      name: 'backendTest',
-      component: () => import('../views/BackendTestView.vue'),
+      path: '/video-stream',
+      name: 'videoStream',
+      component: () => import('../views/VideoStreamView.vue'),
     },
   ],
 })

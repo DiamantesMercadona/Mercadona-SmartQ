@@ -1,14 +1,10 @@
 <template>
-  <div class="test-view">
-    <h2>Backend Test</h2>
+  <div class="video-stream-view">
+    <h2>Video Stream</h2>
 
     <!-- Control de cajas -->
     <section class="cajas-section">
-      <h3>PATCH /cajas/:id — Control de cajas</h3>
-      <p class="description">
-        Abre o cierra cajas directamente en el backend. La simulación refleja los cambios
-        automáticamente en el siguiente ciclo de refresco.
-      </p>
+      <h3>Control de cajas</h3>
       <button @click="cargarCajas">Refrescar</button>
       <div class="cajas-list">
         <div v-for="caja in cajas" :key="caja.id" class="caja-row">
@@ -26,7 +22,7 @@
       </div>
     </section>
 
-    <!-- WS /ws/video/events -->
+    <!-- Visor WS -->
     <section class="viewer-section">
       <h3>WS /ws/video/events</h3>
       <p class="description">Visor de frames en tiempo real del simulador</p>
@@ -47,7 +43,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { getCajas, patchCajaEstado } from '../services/backendApi.js'
 
-//  Cajas
+// -- Cajas --
 
 const cajas = ref([])
 
@@ -70,7 +66,8 @@ async function setCajaEstado(id, estado) {
 
 onMounted(cargarCajas)
 
-//  Video viewer
+// -- Video viewer --
+
 const viewerCanvas = ref(null)
 const viewerStatus = ref('idle')
 const frameCount = ref(0)
@@ -168,158 +165,4 @@ function toggleVideoViewer() {
 onUnmounted(disconnectVideoViewer)
 </script>
 
-<style scoped>
-.test-view {
-  padding: 24px;
-  font-family: monospace;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-h2 {
-  margin: 0;
-}
-
-section {
-  display: flex;
-  align-items: flex-end;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-h3 {
-  margin: 0;
-  width: 100%;
-  font-size: 13px;
-  color: #888;
-}
-
-.description {
-  margin: 0;
-  width: 100%;
-  font-size: 12px;
-  color: #555;
-}
-
-button {
-  padding: 4px 14px;
-  border: 1px solid #555;
-  border-radius: 4px;
-  background: #2d2d2d;
-  color: #eee;
-  cursor: pointer;
-  font-size: 13px;
-  align-self: flex-end;
-}
-
-button:hover {
-  background: #3d3d3d;
-}
-
-.cajas-section {
-  flex-direction: column;
-  align-items: flex-start;
-}
-
-.cajas-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-top: 8px;
-  width: 100%;
-}
-
-.caja-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.caja-id {
-  width: 56px;
-  font-size: 12px;
-  color: #ccc;
-}
-
-.estado-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
-  background: #6b7280;
-}
-
-.estado-dot.activa {
-  background: #10b981;
-  box-shadow: 0 0 5px rgba(16, 185, 129, 0.7);
-}
-
-.estado-dot.cerrada {
-  background: #ef4444;
-  box-shadow: 0 0 5px rgba(239, 68, 68, 0.5);
-}
-
-.estado-label {
-  width: 52px;
-  font-size: 11px;
-  color: #888;
-}
-
-.empty {
-  font-size: 11px;
-  color: #555;
-  margin: 0;
-}
-
-.viewer-section {
-  flex-direction: column;
-  align-items: flex-start;
-}
-
-.viewer-controls {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.ws-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #4b5563;
-  transition: background 0.3s;
-  flex-shrink: 0;
-}
-
-.ws-dot.connected {
-  background: #10b981;
-  box-shadow: 0 0 6px rgba(16, 185, 129, 0.7);
-}
-
-.ws-dot.error {
-  background: #ef4444;
-}
-
-.ws-dot.disconnected {
-  background: #6b7280;
-}
-
-.ws-label {
-  font-size: 12px;
-  color: #aaa;
-}
-
-.frames-label {
-  font-size: 11px;
-  color: #555;
-}
-
-.viewer-canvas {
-  border: 1px solid #1f2937;
-  border-radius: 6px;
-  max-width: 100%;
-  margin-top: 10px;
-}
-</style>
+<style scoped src="./VideoStreamView.css"></style>

@@ -1,5 +1,1 @@
-- Modifcar los setTimeout para que los que ya esten creados se modifiquen cnado cambias la velocidad de la simulacion.
-- O opcion B: simplemente dejar los tiempos como estan y poner el slider por defecto a 20 o un valor alto.
-
-
-- Cuando se abra una caja los clientes que esten en una cola llena se pasen a la vacia.
+- Mejorar labels de las cajas y tipo de las letras de la similacion
