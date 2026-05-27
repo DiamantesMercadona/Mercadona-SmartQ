@@ -1,8 +1,11 @@
 # Importaciones y configuración
 from __future__ import annotations
+import asyncio
 import ctypes
 import os
+import queue
 import sqlite3
+import threading
 import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple, Union
@@ -20,6 +23,190 @@ try:
     from .config import CONFIG
 except ImportError:
     from config import CONFIG
+
+
+# ------------------------------------------------------------------
+# Fuente de vídeo por WebSocket (para recibir frames de la simulación)
+# ------------------------------------------------------------------
+
+class WsVideoSource:
+    """
+    Fuente de vídeo asíncrona que recibe frames JPEG desde un endpoint WebSocket.
+
+    Diseñada para conectarse a /ws/video/events del backend FastAPI, que redistribuye
+    los frames JPEG binarios enviados por la simulación 3D (Vue/Three.js) a través de
+    Redis Pub/Sub.
+
+    Corre en un hilo de background con su propio event loop asyncio. Los frames
+    decodificados (numpy arrays BGR) se colocan en una Queue thread-safe para que el
+    bucle principal de VisionEngine los consuma de forma síncrona.
+
+    Flujo completo:
+        Simulación → WS /ws/video → Redis → WS /ws/video/events → WsVideoSource → VisionEngine
+
+    Parámetros de reconexión:
+        En caso de pérdida de conexión, reintenta automáticamente cada 2 segundos.
+    """
+
+    _RECONNECT_DELAY = 2.0   # segundos entre reintentos de conexión
+    _READ_TIMEOUT    = 0.15  # segundos de espera máxima en read() antes de devolver vacío
+
+    def __init__(self, url: str, maxsize: int = 8) -> None:
+        """
+        Args:
+            url:     URL WebSocket completa, p.ej. 'ws://localhost:8000/api/v1/ws/video/events'
+            maxsize: Tamaño máximo de la cola interna de frames.
+                     Frames más antiguos se descartan al llenarse (backpressure).
+        """
+        self._url = url
+        self._queue: queue.Queue = queue.Queue(maxsize=maxsize)
+        self._stop_event = threading.Event()
+        self._thread: Optional[threading.Thread] = None
+        self._loop: Optional[asyncio.AbstractEventLoop] = None
+
+    # ------------------------------------------------------------------
+    # Ciclo de vida
+    # ------------------------------------------------------------------
+
+    def start(self) -> None:
+        """Arranca el hilo de recepción de frames en background."""
+        self._stop_event.clear()
+        self._thread = threading.Thread(
+            target=self._run_loop,
+            daemon=True,
+            name="WsVideoSource",
+        )
+        self._thread.start()
+
+    def stop(self) -> None:
+        """Señaliza el cierre y espera a que el hilo termine (máximo 4 s)."""
+        self._stop_event.set()
+        if self._loop and not self._loop.is_closed():
+            self._loop.call_soon_threadsafe(self._loop.stop)
+        if self._thread:
+            self._thread.join(timeout=4.0)
+        # Sentinel para desbloquear cualquier read() pendiente
+        try:
+            self._queue.put_nowait(None)
+        except queue.Full:
+            pass
+
+    def release(self) -> None:
+        """Alias de stop() para compatibilidad con la interfaz de cv2.VideoCapture."""
+        self.stop()
+
+    # ------------------------------------------------------------------
+    # Interfaz pública (compatible con cv2.VideoCapture)
+    # ------------------------------------------------------------------
+
+    def isOpened(self) -> bool:  # noqa: N802
+        """Devuelve True mientras el hilo receptor esté activo."""
+        return (
+            self._thread is not None
+            and self._thread.is_alive()
+            and not self._stop_event.is_set()
+        )
+
+    def read(self) -> Tuple[bool, Optional[np.ndarray]]:
+        """Lee el siguiente frame disponible de la cola interna.
+
+        Returns:
+            ``(True, frame)``  → frame BGR listo para procesar.
+            ``(False, None)``  → sin frame en este ciclo (WS reconectando o cola vacía).
+                                 Llama a ``isOpened()`` para saber si la fuente sigue activa.
+        """
+        if self._stop_event.is_set():
+            return False, None
+        try:
+            frame = self._queue.get(timeout=self._READ_TIMEOUT)
+            if frame is None:       # sentinel de cierre
+                return False, None
+            return True, frame
+        except queue.Empty:
+            return False, None      # sin frame en este ciclo; la fuente sigue activa
+
+    # ------------------------------------------------------------------
+    # Internals: hilo de background + event loop asyncio
+    # ------------------------------------------------------------------
+
+    def _run_loop(self) -> None:
+        """Crea un event loop asyncio dedicado y ejecuta la coroutine de recepción."""
+        self._loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self._loop)
+        try:
+            self._loop.run_until_complete(self._receive_frames())
+        except Exception as exc:
+            print(f"[WsVideoSource] Error en el loop asyncio: {exc}")
+        finally:
+            self._loop.close()
+            try:
+                self._queue.put_nowait(None)   # sentinel de cierre
+            except queue.Full:
+                pass
+
+    async def _receive_frames(self) -> None:
+        """Coroutine principal: conecta al WebSocket y recibe frames JPEG en bucle.
+
+        Reconexión automática cada ``_RECONNECT_DELAY`` segundos en caso de error.
+        """
+        import websockets  # importación local para no penalizar si no se usa el modo WS
+
+        while not self._stop_event.is_set():
+            try:
+                async with websockets.connect(
+                    self._url,
+                    ping_interval=20,
+                    ping_timeout=10,
+                    close_timeout=5,
+                ) as ws:
+                    print(f"[WsVideoSource] Conectado a {self._url}")
+                    async for message in ws:
+                        if self._stop_event.is_set():
+                            return
+
+                        if not isinstance(message, bytes):
+                            continue  # ignorar mensajes de texto
+
+                        frame = self._decode_jpeg(message)
+                        if frame is None:
+                            continue
+
+                        # Backpressure: descartar el frame más antiguo si la cola está llena
+                        if self._queue.full():
+                            try:
+                                self._queue.get_nowait()
+                            except queue.Empty:
+                                pass
+                        try:
+                            self._queue.put_nowait(frame)
+                        except queue.Full:
+                            pass  # descartado si la cola se llenó justo antes
+
+            except OSError as exc:
+                print(f"[WsVideoSource] No se pudo conectar a {self._url}: {exc}")
+            except Exception as exc:  # noqa: BLE001
+                print(f"[WsVideoSource] Error inesperado: {exc}")
+
+            if not self._stop_event.is_set():
+                print(f"[WsVideoSource] Reintentando en {self._RECONNECT_DELAY} s...")
+                await asyncio.sleep(self._RECONNECT_DELAY)
+
+    @staticmethod
+    def _decode_jpeg(data: bytes) -> Optional[np.ndarray]:
+        """Decodifica un buffer JPEG a un array numpy BGR (formato OpenCV).
+
+        Args:
+            data: Bytes del frame JPEG recibido por el WebSocket.
+
+        Returns:
+            Array BGR de shape (H, W, 3), o None si la decodificación falla.
+        """
+        try:
+            buf = np.frombuffer(data, dtype=np.uint8)
+            frame = cv2.imdecode(buf, cv2.IMREAD_COLOR)
+            return frame if frame is not None and frame.size > 0 else None
+        except Exception:
+            return None
 
 
 # Declara la clase VisionEngine, responsable del procesamiento de vídeo en tiempo real,
@@ -40,6 +227,9 @@ class VisionEngine:
     # Inicialización y gestión de ciclo de vida
     # ------------------------------------------------------------------
 
+    # Esquemas reconocidos como fuente WebSocket
+    _WS_SCHEMES = ("ws://", "wss://")
+
     # Inicializa el motor de visión configurando la captura, parámetros de YOLO, ROIs y base de datos.
     def __init__(self, source: Optional[Union[int, str]] = None) -> None:
         """Inicializa los recursos del motor de visión.
@@ -48,23 +238,66 @@ class VisionEngine:
         de las ROIs y establece conexión con la base de datos relacional para el registro continuo.
 
         Args:
-            source: Índice de la cámara o ruta al archivo de vídeo. Si es None, utiliza el recurso por defecto.
+            source: Fuente de vídeo. Puede ser:
+                - ``None``           → vídeo de demostración local (defecto).
+                - ``"ws"``           → WebSocket con la URL configurada en CONFIG["VISION"]["ws_url"]
+                                       (recibe frames JPEG de la simulación vía /ws/video/events).
+                - ``"ws://..."``     → URL WebSocket completa explícita.
+                - ``"wss://..."``    → URL WebSocket segura explícita.
+                - ``int``            → índice de cámara física.
+                - ``str`` (ruta)     → ruta a un archivo de vídeo local.
 
         Example:
-            # Inicialización estándar
+            # Modo WebSocket (simulación 3D como fuente de vídeo)
+            with VisionEngine(source="ws") as engine:
+                engine.process()
+
+            # Modo archivo local (defecto)
             with VisionEngine() as engine:
                 engine.process()
         """
         self.base_dir = os.path.dirname(__file__)
         self.default_video = os.path.join(self.base_dir, "resources", "3d_demo.webm")
 
-        # Determinar y validar la fuente de vídeo a procesar
-        if source is None:
-            source = self.default_video
-        elif isinstance(source, str) and not os.path.isabs(source):
-            source = os.path.join(self.base_dir, source)
+        # ------------------------------------------------------------------
+        # Resolución de la fuente de vídeo: archivo/cámara o WebSocket
+        # ------------------------------------------------------------------
+        vision_cfg = CONFIG.get("VISION", {})
 
-        self.cap = cv2.VideoCapture(source)
+        # El valor especial "ws" usa la URL configurada en CONFIG
+        if source == "ws":
+            source = vision_cfg.get(
+                "ws_url",
+                "ws://localhost:8000/api/v1/ws/video/events",
+            )
+
+        self._ws_mode: bool = isinstance(source, str) and source.startswith(self._WS_SCHEMES)
+
+        if self._ws_mode:
+            # Modo WebSocket: usar WsVideoSource como fuente de frames
+            assert isinstance(source, str)
+            self._ws_source = WsVideoSource(source)
+            self._ws_source.start()
+            self.cap = self._ws_source          # interfaz compatible (isOpened / read / release)
+
+            # Dimensiones de frame para los cálculos de ROI (configurables, sin VideoCapture)
+            frame_w = vision_cfg.get("ws_frame_width", 1280)
+            print(f"[VisionEngine] Modo WebSocket activado. URL: {source}")
+        else:
+            # Modo tradicional: archivo de vídeo o cámara física
+            self._ws_source = None
+            if source is None:
+                source = self.default_video
+            elif isinstance(source, str) and not os.path.isabs(source):
+                source = os.path.join(self.base_dir, source)
+
+            self.cap = cv2.VideoCapture(source)
+
+            # Computar la anchura horizontal de forma dinámica respecto al ancho del vídeo
+            frame_w = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            if frame_w <= 0:
+                frame_w = 1280
+
         self.window_name = "MSQ Engine"
 
         # Obtener dimensiones físicas del monitor para una presentación adaptativa de la interfaz
@@ -79,14 +312,14 @@ class VisionEngine:
             pass
 
         # Cargar configuración del modelo YOLOv8 desde la configuración global o establecer valores por defecto
-        yolo_model = CONFIG.get("VISION", {}).get("yolo_model", "yolov8n.pt")
+        yolo_model = vision_cfg.get("yolo_model", "yolov8n.pt")
         self.model = YOLO(yolo_model)
-        self.confidence_threshold = CONFIG.get("VISION", {}).get("yolo_confidence", 0.3)
-        self.iou_threshold = CONFIG.get("VISION", {}).get("yolo_iou", 0.45)
-        self.imgsz = CONFIG.get("VISION", {}).get("yolo_imgsz", 480)
+        self.confidence_threshold = vision_cfg.get("yolo_confidence", 0.3)
+        self.iou_threshold = vision_cfg.get("yolo_iou", 0.45)
+        self.imgsz = vision_cfg.get("yolo_imgsz", 480)
 
         # Configuración del factor de omisión de frames (frame skipping) para optimizar rendimiento
-        self.frame_skip = CONFIG.get("VISION", {}).get("yolo_frame_skip", 2)
+        self.frame_skip = vision_cfg.get("yolo_frame_skip", 2)
         self.frame_count = 0
         self.last_person_boxes: List[Tuple[int, int, int, int]] = []
 
@@ -98,11 +331,6 @@ class VisionEngine:
         self.fps_time = time.time()
         self.fps_count = 0
         self.fps = 0
-
-        # Computar la anchura horizontal de forma dinámica respecto al ancho del vídeo
-        frame_w = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        if frame_w <= 0:
-            frame_w = 1280
 
         # Márgenes laterales para centrar las regiones de interés (ROIs) en pantalla
         self.roi_left_margin = 200
@@ -186,9 +414,10 @@ class VisionEngine:
     def _terminate(self) -> None:
         """Libera de forma ordenada los recursos del sistema y conexiones.
 
-        Cierra la captura de OpenCV, destruye las interfaces visuales y finaliza
-        la conexión activa a la base de datos SQLite.
+        Cierra la captura de vídeo (VideoCapture o WsVideoSource), destruye las interfaces
+        visuales y finaliza la conexión activa a la base de datos SQLite.
         """
+        # release() funciona igual para cv2.VideoCapture y WsVideoSource
         self.cap.release()
         try:
             cv2.destroyAllWindows()
@@ -529,8 +758,18 @@ class VisionEngine:
         Mantiene la cadencia controlada a 30 FPS, distribuye el procesamiento omitiendo frames
         según configuración y delega la representación visual del panel de control de forma robusta.
 
+        En modo WebSocket la fuente puede no enviar frame en cada iteración (reconexión,
+        red lenta…). En ese caso el bucle simplemente espera al siguiente ciclo sin romper
+        el procesamiento, a diferencia del modo archivo/cámara donde un ``ret=False`` indica
+        el fin del flujo y cierra el motor.
+
         Example:
+            # Modo archivo/cámara (comportamiento original)
             with VisionEngine() as engine:
+                engine.process()
+
+            # Modo simulación WebSocket
+            with VisionEngine(source="ws") as engine:
                 engine.process()
         """
         target_fps = 30
@@ -539,8 +778,18 @@ class VisionEngine:
         while self.cap.isOpened():
             frame_start = time.time()
             ret, frame = self.cap.read()
-            if not ret:
-                break
+
+            if not ret or frame is None:
+                if self._ws_mode:
+                    # En modo WS un ciclo sin frame es normal (WS reconectando o sin datos todavía).
+                    # Mantener cadencia y reintentar en el siguiente tick.
+                    elapsed = time.time() - frame_start
+                    if elapsed < frame_time:
+                        time.sleep(frame_time - elapsed)
+                    continue
+                else:
+                    # En modo archivo/cámara el fin del flujo rompe el bucle.
+                    break
 
             self.frame_count += 1
 
@@ -633,13 +882,13 @@ class VisionEngine:
                 for x1, y1, x2, y2 in person_boxes:
                     feet_x = int((x1 + x2) / 2)
                     feet_y = y2
+                    client_type = "sinCarro"  # valor por defecto si la persona no entra en ninguna ROI
 
                     in_any_roi = False
                     for caja_id in self.rois.keys():
                         roi_polygon = self._build_roi_polygon(caja_id)
                         if self._point_in_roi((feet_x, feet_y), roi_polygon):
                             # Para el fallback, determinar tipo usando self.last_cart_boxes y heurística híbrida
-                            client_type = "sinCarro"
                             p_center = ((x1 + x2) / 2, (y1 + y2) / 2)
                             p_feet = (feet_x, feet_y)
                             for cx1, cy1, cx2, cy2 in getattr(self, "last_cart_boxes", []):

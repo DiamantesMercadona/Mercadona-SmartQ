@@ -17,6 +17,14 @@ CONFIG = {
         "yolo_iou": 0.45,                    # Umbral de Intersection over Union (IoU) para Non-Maximum Suppression (NMS)
         "yolo_frame_skip": 1,                # Factor de omisión de fotogramas para inferencia (1 = procesar todos)
         "cart_association_threshold": 120,   # Umbral de distancia en píxeles para emparejar carros con personas
+
+        # ------------------------------------------------------------------
+        # Fuente WebSocket (simulación 3D)
+        # Actívese pasando source="ws" o source="ws://..." a VisionEngine.
+        # ------------------------------------------------------------------
+        "ws_url": "ws://localhost:8000/api/v1/ws/video/events",  # Endpoint WS de salida del backend
+        "ws_frame_width": 1904,              # Ancho del frame
+        "ws_frame_height": 935,              # Alto del frame
     },
 
     # ------------------------------------------------------------------
