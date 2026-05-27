@@ -114,7 +114,26 @@ class VisionEngine:
         roi_w = max(10, (available_w - (6 * self.roi_margin_between)) // 7)
         self.roi_base_width = roi_w
         self.roi_base_height = 500
-        self.roi_base_y = 250
+
+        # Configuración avanzada de variables de control y ajuste dinámico espacial
+        self.cart_association_threshold = CONFIG.get("VISION", {}).get("cart_association_threshold", 120)
+        self.last_cart_boxes: List[Tuple[int, int, int, int]] = []
+
+        self.roi_lower_shift_left = 120            # Desplazamiento lateral inferior hacia la izquierda de las 3 ROIs izquierdas
+        self.roi_lower_shift_right = 160           # Desplazamiento lateral inferior hacia la derecha de las 3 ROIs derechas
+        self.roi_lower_width = roi_w               # Ancho de referencia inferior de las ROIs
+        self.roi_left_offset_x = 120               # Desplazamiento horizontal completo hacia la derecha de las 3 ROIs izquierdas
+        self.roi_right_offset_x = -20              # Desplazamiento horizontal completo hacia la izquierda de las 3 ROIs derechas
+        self.roi_right_width_delta = -15           # Reducción de ancho de las 3 ROIs derechas (se juntan hacia la izquierda)
+        self.roi_global_y_offset = -10             # Elevación vertical global de todas las ROIs (subir 10px)
+        self.roi_base_y = 250 + self.roi_global_y_offset  # Coordenada vertical Y base para los polígonos de las ROIs
+ 
+        self.roi_top_expansion = -20               # Expansión superior de los polígonos de las ROIs
+        self.roi_bottom_expansion = 70             # Expansión inferior de los polígonos de las ROIs
+        self.roi_global_expansion = 0              # Expansión global de los polígonos de las ROIs
+ 
+        self.roi_offset_x = 0                      # Offset dinámico horizontal global de ajuste fino
+        self.roi_offset_y = 0                      # Offset dinámico vertical global de ajuste fino
 
         self.rois: Dict[str, Tuple[int, int, int, int]] = {}
         self.counts: Dict[str, List[str]] = {}
@@ -124,24 +143,17 @@ class VisionEngine:
 
         for i, pos_idx in enumerate(posiciones, 1):
             caja_id = str(i)
-            x_roi = self.roi_left_margin + pos_idx * (roi_w + self.roi_margin_between)
-            self.rois[caja_id] = (int(x_roi), int(self.roi_base_y), int(roi_w), self.roi_base_height)
+            caja_w = roi_w
+            if i <= 3:
+                x_roi = self.roi_left_margin + pos_idx * (roi_w + self.roi_margin_between) + self.roi_left_offset_x
+            else:
+                caja_w += self.roi_right_width_delta
+                # El punto de inicio de la primera de la derecha (i = 4, pos_idx = 4)
+                x_start_right = self.roi_left_margin + 4 * (roi_w + self.roi_margin_between) + self.roi_right_offset_x
+                # Cada caja de la derecha se junta hacia la izquierda con su nuevo ancho y margen
+                x_roi = x_start_right + (i - 4) * (caja_w + self.roi_margin_between)
+            self.rois[caja_id] = (int(x_roi), int(self.roi_base_y), int(caja_w), self.roi_base_height)
             self.counts[caja_id] = []
-
-        # Configuración avanzada de variables de control y ajuste dinámico espacial
-        self.cart_association_threshold = CONFIG.get("VISION", {}).get("cart_association_threshold", 120)
-        self.last_cart_boxes: List[Tuple[int, int, int, int]] = []
-
-        self.roi_lower_shift_left = 140
-        self.roi_lower_shift_right = 140
-        self.roi_lower_width = roi_w
-
-        self.roi_top_expansion = -20
-        self.roi_bottom_expansion = 70
-        self.roi_global_expansion = 0
-
-        self.roi_offset_x = 0
-        self.roi_offset_y = 0
 
         # Inicialización de la base de datos centralizada
         self.db = DatabaseMSQ()
@@ -208,14 +220,14 @@ class VisionEngine:
         posiciones = [0, 1, 2, 4, 5, 6]
         pos_idx = posiciones[roi_num - 1]
 
-        w = self.roi_base_width
+        w = self.rois[caja_id][2]
         h = self.roi_base_height
 
         # Computar la posición vertical corregida según el desplazamiento global
         y = self.roi_base_y + self.roi_offset_y
 
         # Determinar la coordenada superior X inicial con offset global incluido
-        x = self.roi_left_margin + pos_idx * (w + self.roi_margin_between) + self.roi_offset_x
+        x = self.rois[caja_id][0] + self.roi_offset_x
 
         # Combinación de deltas dinámicos globales y de nivel
         bottom_expansion = self.roi_bottom_expansion + self.roi_global_expansion
@@ -451,7 +463,7 @@ class VisionEngine:
         active = [
             (t_id, data["box"])
             for t_id, data in self.tracks.items()
-            if data["misses"] <= self.max_missed_frames
+            if data["misses"] == 0
         ]
         return active
 
@@ -532,6 +544,9 @@ class VisionEngine:
 
             self.frame_count += 1
 
+            # Dibujar primero los polígonos de las ROIs de fondo
+            self._draw_rois(frame)
+
             # Ejecutar modelo de detección únicamente en los frames indicados por frame_skip
             if self.frame_count % self.frame_skip == 0:
                 results = self.model(
@@ -586,21 +601,8 @@ class VisionEngine:
                             break
 
                     color = (0, 255, 0)      # Las cajas de las personas son siempre verdes (requisito de UI)
-                    label = f"ID:{track_id}"
                     client_type = self.tracks[track_id].get("type", "sinCarro")
-                    if client_type == "conCarro":
-                        label += " + Carro"
-
-                    cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
-                    cv2.putText(
-                        frame,
-                        label,
-                        (x1, y1 - 8),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        0.5,
-                        color,
-                        1,
-                    )
+                    cv2.rectangle(frame, (x1, y1), (x2, y2), color, 1)
 
                     # Si el cliente lleva carro, asegurar que se dibuje una caja naranja (física o estimada virtual)
                     if client_type == "conCarro":
@@ -627,15 +629,6 @@ class VisionEngine:
                                 cx2 = x2
                                 cy2 = y2
                             cv2.rectangle(frame, (cx1, cy1), (cx2, cy2), (0, 165, 255), 1)  # Naranja fino
-                            cv2.putText(
-                                frame,
-                                "Carro (Est.)",
-                                (cx1, cy1 - 5),
-                                cv2.FONT_HERSHEY_SIMPLEX,
-                                0.4,
-                                (0, 165, 255),
-                                1,
-                            )
             else:
                 for x1, y1, x2, y2 in person_boxes:
                     feet_x = int((x1 + x2) / 2)
@@ -671,7 +664,7 @@ class VisionEngine:
                                 break
 
                     color = (0, 255, 0)      # Las cajas de las personas son siempre verdes (requisito de UI)
-                    cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+                    cv2.rectangle(frame, (x1, y1), (x2, y2), color, 1)
 
                     # Dibujar carro estimado en el bucle fallback si corresponde
                     if client_type == "conCarro":
@@ -697,29 +690,11 @@ class VisionEngine:
                                 cx2 = x2
                                 cy2 = y2
                             cv2.rectangle(frame, (cx1, cy1), (cx2, cy2), (0, 165, 255), 1)  # Naranja fino
-                            cv2.putText(
-                                frame,
-                                "Carro (Est.)",
-                                (cx1, cy1 - 5),
-                                cv2.FONT_HERSHEY_SIMPLEX,
-                                0.4,
-                                (0, 165, 255),
-                                1,
-                            )
 
             # Dibujar los carros detectados (para visualización premium bajo el capó)
             if hasattr(self, "last_cart_boxes"):
                 for cx1, cy1, cx2, cy2 in self.last_cart_boxes:
                     cv2.rectangle(frame, (cx1, cy1), (cx2, cy2), (0, 165, 255), 1)  # Naranja fino
-                    cv2.putText(
-                        frame,
-                        "Carro",
-                        (cx1, cy1 - 5),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        0.4,
-                        (0, 165, 255),
-                        1,
-                    )
 
             self.counts = current_counts
 
@@ -782,31 +757,34 @@ class VisionEngine:
     # ------------------------------------------------------------------
 
     # Dibuja los límites de los polígonos, contadores y cabecera sobre el fotograma de salida.
+    def _draw_rois(self, frame: np.ndarray) -> None:
+        """Dibuja únicamente los polígonos de contorno de las ROIs en el fotograma."""
+        for caja_id in self.rois.keys():
+            roi_polygon = self._build_roi_polygon(caja_id)
+            cv2.polylines(frame, [roi_polygon], isClosed=True, color=(255, 0, 0), thickness=1)
+
     def _draw_interface(self, frame: np.ndarray) -> None:
         """Dibuja los elementos de la interfaz de usuario en el fotograma.
 
-        Dibuja los contornos de las ROIs poligonales, los textos informativos
-        de cada caja alineados dinámicamente y el panel superior de resumen.
+        Dibuja los textos informativos de cada caja alineados dinámicamente y el panel superior de resumen.
 
         Args:
             frame: Fotograma en formato de matriz NumPy sobre el cual dibujar.
         """
         for caja_id in self.rois.keys():
             roi_polygon = self._build_roi_polygon(caja_id)
-            cv2.polylines(frame, [roi_polygon], isClosed=True, color=(255, 0, 0), thickness=2)
-
-            text_x = roi_polygon[0][0]
-            text_y = roi_polygon[0][1] - 10
+            text_x = roi_polygon[3][0]
+            text_y = roi_polygon[3][1] + 20
             personas = len(self.counts[caja_id])
             carros = self.counts[caja_id].count("conCarro")
             cv2.putText(
                 frame,
-                f"Caja {caja_id}: {personas} ({carros} cart)",
+                f"Caja {caja_id}: {personas} + {carros}",
                 (text_x, text_y),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.6,
                 (255, 0, 0),
-                2,
+                1,
             )
 
         # Panel superior de información general
@@ -820,7 +798,7 @@ class VisionEngine:
             cv2.FONT_HERSHEY_SIMPLEX,
             0.65,
             (0, 255, 0),
-            2,
+            1,
         )
 
     # Redimensiona el fotograma manteniendo la relación de aspecto para ajustarse a las cotas físicas de la pantalla.
