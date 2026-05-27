@@ -96,7 +96,7 @@ import { useReferenciasEspaciales } from '@/composables/useReferenciasEspaciales
 const SUELO_LARGO = 40
 const SUELO_ANCHO = 32
 
-const FPS_SEND_RENDER = 24 // En ls retransmisión solo llega a 10 qunque lo ponga 24.
+const FPS_SEND_RENDER = 24
 
 const VIDEO_RECORDING_FPS = 30
 

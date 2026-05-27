@@ -91,6 +91,8 @@ export class VideoWS {
   // Dimensiones de captura (calculadas en startStreaming)
   #captureWidth = 960
   #captureHeight = 540
+  // true si el canvas debe escalarse antes de enviar (scale < 1)
+  #needsResize = false
 
   /** Llamado cuando cambia el estado de la conexión WS. */
   onStatusChange = null
@@ -172,11 +174,16 @@ export class VideoWS {
     try {
       // createImageBitmap hace el resize en GPU/compositor, no en CPU.
       // El await libera el main thread mientras espera → Three.js sigue renderizando.
-      imageBitmap = await createImageBitmap(srcCanvas, {
-        resizeWidth: this.#captureWidth,
-        resizeHeight: this.#captureHeight,
-        resizeQuality: 'low',
-      })
+      // Si no hay que escalar, no se pasan opciones de resize para preservar la
+      // resolución nativa del canvas (igual que la grabación local).
+      const bitmapOptions = this.#needsResize
+        ? {
+            resizeWidth: this.#captureWidth,
+            resizeHeight: this.#captureHeight,
+            resizeQuality: 'high',
+          }
+        : {}
+      imageBitmap = await createImageBitmap(srcCanvas, bitmapOptions)
     } catch {
       this.#capturing = false
       return
@@ -196,7 +203,7 @@ export class VideoWS {
         imageBitmap,
         width: this.#captureWidth,
         height: this.#captureHeight,
-        quality: 0.7,
+        quality: 0.92,
       },
       [imageBitmap], // transferir ownership → sin copia de píxeles
     )
@@ -205,22 +212,25 @@ export class VideoWS {
   /**
    * Inicia el envío periódico de frames.
    * Usa requestAnimationFrame para sincronizar con el ciclo de render del navegador.
-   * La captura se reduce automáticamente a maxCaptureWidth píxeles de ancho
-   * manteniendo el aspect ratio del canvas fuente.
+   * Por defecto se usa la resolución nativa del canvas (sin downscale), igual
+   * que en la grabación local. Pasar maxCaptureWidth para limitarla si se
+   * necesita reducir el ancho de banda.
    *
    * @param {HTMLCanvasElement|{domElement: HTMLCanvasElement}} canvasOrRenderer
    * @param {number} fps              - FPS objetivo (defecto: 24)
-   * @param {number} maxCaptureWidth  - Ancho máximo de captura (defecto: 960)
+   * @param {number} maxCaptureWidth  - Ancho máximo de captura (defecto: Infinity = resolución nativa)
    */
-  startStreaming(canvasOrRenderer, fps = 24, maxCaptureWidth = 960) {
+  startStreaming(canvasOrRenderer, fps = 24, maxCaptureWidth = Infinity) {
     this.stopStreaming()
     this.#initWorker()
 
-    // Calcular dimensiones de captura respetando el aspect ratio
+    // Calcular dimensiones de captura respetando el aspect ratio.
+    // Si maxCaptureWidth >= ancho del canvas, scale = 1 y no se hace resize.
     const srcCanvas = canvasOrRenderer?.domElement ?? canvasOrRenderer
     const scale = Math.min(1, maxCaptureWidth / (srcCanvas.width || maxCaptureWidth))
     this.#captureWidth = Math.round((srcCanvas.width || maxCaptureWidth) * scale)
     this.#captureHeight = Math.round((srcCanvas.height || 540) * scale)
+    this.#needsResize = scale < 1
 
     const intervalMs = 1000 / fps
     this.#lastFrameTime = 0
