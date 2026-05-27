@@ -257,7 +257,7 @@ class VisionEngine:
                 engine.process()
         """
         self.base_dir = os.path.dirname(__file__)
-        self.default_video = os.path.join(self.base_dir, "resources", "3d_demo.webm")
+        self.default_video = os.path.join(self.base_dir, "resources", "videos", "demo.webm")
 
         # ------------------------------------------------------------------
         # Resolución de la fuente de vídeo: archivo/cámara o WebSocket
@@ -265,6 +265,9 @@ class VisionEngine:
         vision_cfg = CONFIG.get("VISION", {})
 
         # El valor especial "ws" usa la URL configurada en CONFIG
+        if source not in ("ws", "demo") and not (isinstance(source, str) and source.startswith(self._WS_SCHEMES)):
+            source = "demo"
+
         if source == "ws":
             source = vision_cfg.get(
                 "ws_url",
@@ -286,7 +289,7 @@ class VisionEngine:
         else:
             # Modo tradicional: archivo de vídeo o cámara física
             self._ws_source = None
-            if source is None:
+            if source is None or source in ("demo"):
                 source = self.default_video
             elif isinstance(source, str) and not os.path.isabs(source):
                 source = os.path.join(self.base_dir, source)

@@ -16,6 +16,7 @@ CONFIG = {
     # Configuración del Motor de Visión Artificial
     # ------------------------------------------------------------------
     "VISION": {
+        "video_source": "ws",                # Fuente de vídeo activa ("ws" para simulación 3D por WS, "demo" para vídeo demo local)
         "yolo_model": "yolov8s.pt",          # Modelo YOLOv8 a cargar para la detección de personas
         "yolo_imgsz": 640,                   # Resolución en píxeles de la imagen de entrada para inferencia
         "yolo_confidence": 0.20,             # Umbral de confianza mínimo de detección (bajar para más recall)

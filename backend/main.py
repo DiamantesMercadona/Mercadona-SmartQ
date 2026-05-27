@@ -6,12 +6,13 @@ except ImportError:
     from vision_engine import VisionEngine
     from database import DatabaseMSQ
 
-# Fuente de vídeo activa. Cambiar aquí para alternar entre modos:
-#   "ws"        → simulación 3D por WebSocket (CONFIG["VISION"]["ws_url"])
-#   None        → vídeo de demostración local
-#   0           → cámara física 0
-#   "ruta.mp4"  → archivo de vídeo
-VIDEO_SOURCE = "ws"
+try:
+    from .config import CONFIG
+except ImportError:
+    from config import CONFIG
+
+# Fuente de vídeo activa cargada desde la configuración
+VIDEO_SOURCE = CONFIG["VISION"].get("video_source", "ws")
 
 # Definición del punto de entrada del backend
 def main():
