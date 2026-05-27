@@ -61,6 +61,7 @@ const login = async () => {
 <template>
   <main class="login-page">
     <section class="login-shell">
+      <img class="login-logo" src="/assets/logo_mercadona.png" alt="Mercadona" />
       <span class="kicker">SmartQ</span>
       <h1>Login</h1>
 
@@ -103,6 +104,13 @@ const login = async () => {
   width: min(420px, 100%);
   display: grid;
   gap: 18px;
+}
+
+.login-logo {
+  justify-self: center;
+  width: min(260px, 78vw);
+  max-height: 110px;
+  object-fit: contain;
 }
 
 .kicker {
