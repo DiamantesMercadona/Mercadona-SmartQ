@@ -2,12 +2,13 @@
   <main class="menu-page">
     <section class="menu-shell">
       <div class="brand-block">
+        <img class="menu-logo" src="/assets/logomercadona2.png" alt="Mercadona" />
         <span class="kicker">SmartQ</span>
         <h1>Panel principal</h1>
         <p>Selecciona el area que quieres abrir para continuar con la gestion del sistema.</p>
       </div>
 
-      <div class="actions-grid">
+      <div class="actions-list">
         <RouterLink class="menu-action simulation" :to="{ name: 'simulacion' }">
           <span class="action-icon">S</span>
           <span>
@@ -57,9 +58,19 @@
 
 .brand-block {
   max-width: 620px;
+  display: grid;
+  gap: 16px;
+}
+
+.menu-logo {
+  justify-self: center;
+  width: min(400px, 100vw);
+  max-height: 170px;
+  object-fit: contain;
 }
 
 .kicker {
+  width: fit-content;
   display: inline-flex;
   align-items: center;
   min-height: 30px;
@@ -75,7 +86,7 @@
 }
 
 h1 {
-  margin: 18px 0 10px;
+  margin: 0;
   font-size: clamp(2.4rem, 6vw, 4.5rem);
   line-height: 1;
 }
@@ -87,18 +98,17 @@ p {
   line-height: 1.6;
 }
 
-.actions-grid {
+.actions-list {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 18px;
+  gap: 14px;
 }
 
 .menu-action {
-  min-height: 180px;
+  min-height: 118px;
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   gap: 18px;
-  padding: 24px;
+  padding: 22px 24px;
   border: 1px solid rgba(23, 51, 38, 0.12);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.82);
@@ -165,12 +175,8 @@ small {
     padding: 24px 18px;
   }
 
-  .actions-grid {
-    grid-template-columns: 1fr;
-  }
-
   .menu-action {
-    min-height: 150px;
+    min-height: 128px;
     padding: 20px;
   }
 }
