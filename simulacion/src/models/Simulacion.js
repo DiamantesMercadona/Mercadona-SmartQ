@@ -2,6 +2,7 @@ import Caja from './Caja.js'
 import { getCajas, getQueues } from '../services/backendApi.js'
 import {
   simulationSpeed,
+  nivelarColasAlAbrir,
   MIN_TIME_EVENT,
   MAX_TIME_EVENT,
   MIN_CLIENTS_EVENT,
@@ -34,12 +35,16 @@ class Simulacion {
 
   async refrescarEstadoCajas() {
     const cajas = await getCajas()
+    let algunaCajaAbrio = false
     for (const c of cajas) {
       const caja = this.obtenerCaja(c.id)
       if (!caja) continue
+      const estabaAbierta = caja.abierta
       caja.abierta = STATUS_ABIERTA.includes(c.estado)
+      if (!estabaAbierta && caja.abierta) algunaCajaAbrio = true
       caja.sincronizarDependiente(caja.abierta)
     }
+    if (algunaCajaAbrio && nivelarColasAlAbrir.value) this.nivelarColas()
   }
 
   obtenerCaja(numeroCaja) {
@@ -61,7 +66,9 @@ class Simulacion {
   async abrirCaja(numeroCaja) {
     const caja = this.obtenerCaja(numeroCaja)
     if (!caja) return null
-    return caja.abrirCaja()
+    const resultado = await caja.abrirCaja()
+    if (nivelarColasAlAbrir.value) this.nivelarColas()
+    return resultado
   }
 
   async cerrarCaja(numeroCaja) {
@@ -78,6 +85,45 @@ class Simulacion {
       prev.cola.length < curr.cola.length ? prev : curr,
     )
     return cajaSeleccionada.id
+  }
+
+  /**
+   * Redistribuye equitativamente los clientes en espera entre todas las cajas abiertas.
+   *
+   * Regla: el cliente en posición 0 de cada caja (ya siendo atendido) nunca se mueve.
+   * El resto se recoge, se ordena por longitud de cola (más corta primero) y se reparte
+   * en round-robin para minimizar la diferencia entre colas.
+   *
+   * Se llama automáticamente cuando una caja pasa de cerrada a abierta.
+   */
+  nivelarColas() {
+    const cajasAbiertas = this.cajas.filter((c) => c.abierta)
+    if (cajasAbiertas.length < 2) return
+
+    // Extraer todos los clientes en espera (índice ≥ 1) de todas las cajas abiertas
+    const enEspera = []
+    for (const caja of cajasAbiertas) {
+      if (caja.cola.length > 1) {
+        enEspera.push(...caja.cola.splice(1))
+      }
+    }
+    if (enEspera.length === 0) return
+
+    // Priorizar las colas más cortas en el reparto (round-robin ordenado)
+    const cajasOrdenadas = [...cajasAbiertas].sort((a, b) => a.cola.length - b.cola.length)
+
+    for (let i = 0; i < enEspera.length; i++) {
+      const caja = cajasOrdenadas[i % cajasOrdenadas.length]
+      const eraVacia = caja.cola.length === 0
+      caja.cola.push(enEspera[i])
+      // Si la caja estaba vacía arrancamos la cadena de timeouts de atención
+      if (eraVacia) caja.removeClienteTimeout()
+    }
+
+    console.log(
+      '[Simulacion] Colas niveladas:',
+      cajasAbiertas.map((c) => `Caja ${c.id}: ${c.cola.length}`).join(', '),
+    )
   }
 
   eventoSimulacion() {
