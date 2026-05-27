@@ -6,6 +6,11 @@
 # infraestructura de persistencia (SQLite y Redis) y las reglas de negocio
 # del algoritmo de toma de decisiones para la gestión de colas.
 
+from pathlib import Path
+
+# Obtener la raíz del proyecto (directorio padre de 'backend')
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
 CONFIG = {
     # ------------------------------------------------------------------
     # Configuración del Motor de Visión Artificial
@@ -17,7 +22,7 @@ CONFIG = {
         "yolo_iou": 0.45,                    # Umbral de Intersection over Union (IoU) para Non-Maximum Suppression (NMS)
         "yolo_frame_skip": 1,                # Factor de omisión de fotogramas para inferencia (1 = procesar todos)
         "cart_association_threshold": 120,   # Umbral de distancia en píxeles para emparejar carros con personas
-
+ 
         # ------------------------------------------------------------------
         # Fuente WebSocket (simulación 3D)
         # Actívese pasando source="ws" o source="ws://..." a VisionEngine.
@@ -26,16 +31,16 @@ CONFIG = {
         "ws_frame_width": 1904,              # Ancho del frame
         "ws_frame_height": 935,              # Alto del frame
     },
-
+ 
     # ------------------------------------------------------------------
     # Configuración de Persistencia y Mensajería
     # ------------------------------------------------------------------
     "DATABASE": {
-        "db_path": "backend/msq.db",         # Ruta física local del archivo SQLite para el histórico
-        "redis_host": "localhost",           # Dirección del servidor de mensajería rápida Redis
-        "redis_port": 6379,                  # Puerto TCP de conexión para el servidor de Redis
-        "redis_db": 0,                       # Índice de base de datos lógica de Redis a utilizar
-        "redis_video_channel": "msq:video:events",  # Canal Pub/Sub para transmisión de eventos en simulación
+        "db_path": str((_PROJECT_ROOT / "backend/msq.db").resolve()),         # Ruta física local del archivo SQLite para el histórico
+        "redis_host": "localhost",                                            # Dirección del servidor de mensajería rápida Redis
+        "redis_port": 6379,                                                   # Puerto TCP de conexión para el servidor de Redis
+        "redis_db": 0,                                                        # Índice de base de datos lógica de Redis a utilizar
+        "redis_video_channel": "msq:video:events",                            # Canal Pub/Sub para transmisión de eventos en simulación
     },
 
     # ------------------------------------------------------------------
