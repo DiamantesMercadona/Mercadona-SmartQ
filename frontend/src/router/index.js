@@ -30,6 +30,11 @@ const router = createRouter({
       component: () => import('../views/GestionEmpleadosView.vue'),
     },
     {
+      path: '/graficas',
+      name: 'graficas-view',
+      component: () => import('../views/GraficasView.vue'),
+    },
+    {
       path: '/gestion-empleada',
       redirect: { name: 'gestion-empleados' },
     },

@@ -23,6 +23,13 @@
             <small>Consulta turnos, asignaciones y disponibilidad del personal.</small>
           </span>
         </RouterLink>
+        <RouterLink class="menu-action graficas" :to="{ name: 'graficas-view' }">
+          <span class="action-icon">G</span>
+          <span>
+            <strong>Graficas y métricas</strong>
+            <small>Consulta tiempos de espera, tendencias y metricas por caja.</small>
+          </span>
+        </RouterLink>
       </div>
     </section>
   </main>
@@ -133,6 +140,10 @@ p {
 
 .staff .action-icon {
   background: #d71920;
+}
+
+.graficas .action-icon {
+  background: #173326;
 }
 
 strong {
