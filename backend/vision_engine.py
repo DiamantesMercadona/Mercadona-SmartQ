@@ -347,9 +347,6 @@ class VisionEngine:
         self.roi_base_height = 500
 
         # Configuración avanzada de variables de control y ajuste dinámico espacial
-        self.cart_association_threshold = CONFIG.get("VISION", {}).get("cart_association_threshold", 120)
-        self.last_cart_boxes: List[Tuple[int, int, int, int]] = []
-
         self.roi_lower_shift_left = 120            # Desplazamiento lateral inferior hacia la izquierda de las 3 ROIs izquierdas
         self.roi_lower_shift_right = 160           # Desplazamiento lateral inferior hacia la derecha de las 3 ROIs derechas
         self.roi_lower_width = roi_w               # Ancho de referencia inferior de las ROIs
@@ -452,14 +449,24 @@ class VisionEngine:
         posiciones = [0, 1, 2, 4, 5, 6]
         pos_idx = posiciones[roi_num - 1]
 
-        w = self.rois[caja_id][2]
+        # Computar geométricamente de forma dinámica para reflejar cualquier cambio en tiempo de ejecución
+        roi_w = self.roi_base_width
+        caja_w = roi_w
+        if roi_num <= 3:
+            x_roi = self.roi_left_margin + pos_idx * (roi_w + self.roi_margin_between) + self.roi_left_offset_x
+        else:
+            caja_w += self.roi_right_width_delta
+            x_start_right = self.roi_left_margin + 4 * (roi_w + self.roi_margin_between) + self.roi_right_offset_x
+            x_roi = x_start_right + (roi_num - 4) * (caja_w + self.roi_margin_between)
+
+        w = caja_w
         h = self.roi_base_height
 
         # Computar la posición vertical corregida según el desplazamiento global
         y = self.roi_base_y + self.roi_offset_y
 
         # Determinar la coordenada superior X inicial con offset global incluido
-        x = self.rois[caja_id][0] + self.roi_offset_x
+        x = x_roi + self.roi_offset_x
 
         # Combinación de deltas dinámicos globales y de nivel
         bottom_expansion = self.roi_bottom_expansion + self.roi_global_expansion
@@ -682,6 +689,7 @@ class VisionEngine:
                 continue
             tid = self.next_track_id
             self.tracks[tid] = {"box": det, "misses": 0}
+            matched_tracks.add(tid)
             self.next_track_id += 1
 
         # Incrementar pérdidas en pistas ausentes y eliminar las obsoletas
@@ -698,57 +706,6 @@ class VisionEngine:
             if data["misses"] == 0
         ]
         return active
-
-    # Asocia los carros detectados a las trayectorias de personas activas basándose en proximidad espacial.
-    def _associate_carts(
-        self,
-        tracked_people: List[Tuple[int, Tuple[int, int, int, int]]],
-        cart_boxes: List[Tuple[int, int, int, int]],
-    ) -> None:
-        """Asocia carros detectados a las trayectorias de personas activas mediante proximidad espacial.
-
-        Actualiza la clave 'type' de cada trayectoria en 'self.tracks' a 'conCarro' o 'sinCarro'
-        y almacena la lista actual de carros en 'self.last_cart_boxes'.
-
-        Args:
-            tracked_people: Lista de tuplas de tipo (track_id, caja_delimitadora) activas.
-            cart_boxes: Lista de cajas delimitadoras de carros detectados en el frame actual.
-        """
-        self.last_cart_boxes = cart_boxes
-
-        for track_id, (px1, py1, px2, py2) in tracked_people:
-            p_center = ((px1 + px2) / 2, (py1 + py2) / 2)
-            p_feet = ((px1 + px2) / 2, py2)
-
-            has_cart = False
-            for cx1, cy1, cx2, cy2 in cart_boxes:
-                c_center = ((cx1 + cx2) / 2, (cy1 + cy2) / 2)
-
-                # Calcular distancias en 2D (centros y pies a centro)
-                dist_centers = np.sqrt(
-                    (p_center[0] - c_center[0]) ** 2 + (p_center[1] - c_center[1]) ** 2
-                )
-                dist_feet = np.sqrt(
-                    (p_feet[0] - c_center[0]) ** 2 + (p_feet[1] - c_center[1]) ** 2
-                )
-
-                if (
-                    dist_centers < self.cart_association_threshold
-                    or dist_feet < self.cart_association_threshold
-                ):
-                    has_cart = True
-                    break
-
-            # Heurística híbrida: si la caja de la persona es ancha, se clasifica con carro (YOLOv8s fallback)
-            if not has_cart:
-                pw = px2 - px1
-                ph = py2 - py1
-                if ph > 0:
-                    aspect_ratio = pw / ph
-                    if aspect_ratio > 0.45 or pw > 63:
-                        has_cart = True
-
-            self.tracks[track_id]["type"] = "conCarro" if has_cart else "sinCarro"
 
     # ------------------------------------------------------------------
     # Bucle principal de procesamiento de video
@@ -803,7 +760,7 @@ class VisionEngine:
             if self.frame_count % self.frame_skip == 0:
                 results = self.model(
                     frame,
-                    classes=[0, 28], # Detección de personas (0) y maletas/carros (28)
+                    classes=[0], # Detección únicamente de personas (0)
                     verbose=False,
                     conf=self.confidence_threshold,
                     iou=self.iou_threshold,
@@ -812,141 +769,41 @@ class VisionEngine:
                 )
 
                 person_boxes = []
-                cart_boxes = []
                 for r in results:
                     for box in r.boxes:
-                        cls_id = int(box.cls[0].item())
                         coords = box.xyxy[0].cpu().numpy()
                         x1, y1, x2, y2 = map(int, coords)
-                        if cls_id == 0:
-                            person_boxes.append((x1, y1, x2, y2))
-                        elif cls_id == 28:
-                            cart_boxes.append((x1, y1, x2, y2))
+                        person_boxes.append((x1, y1, x2, y2))
 
                 # Dispersar detecciones redundantes y actualizar histórico temporal
                 person_boxes = self._separate_overlapping_boxes(person_boxes)
                 self.last_person_boxes = person_boxes
                 tracked = self._update_tracks(person_boxes)
-                # Asociar carros a las personas tracked en este frame de inferencia
-                self._associate_carts(tracked, cart_boxes)
             else:
                 # Utilizar predicciones del fotograma anterior en frames omitidos
                 person_boxes = self.last_person_boxes
                 tracked = self._update_tracks(person_boxes)
-                # En frames omitidos, se conservan los tipos en las trayectorias
 
             current_counts: Dict[str, List[str]] = {str(i): [] for i in range(1, 7)}
 
             # Procesar pertenencia espacial utilizando preferentemente el histórico de tracks
-            if tracked:
-                for track_id, (x1, y1, x2, y2) in tracked:
-                    feet_x = int((x1 + x2) / 2)
-                    feet_y = y2
+            boxes_to_process = tracked if tracked else [(None, b) for b in person_boxes]
+            for track_data in boxes_to_process:
+                box = track_data[1]
+                x1, y1, x2, y2 = box
+                feet_x = int((x1 + x2) / 2)
+                feet_y = y2
 
-                    in_any_roi = False
-                    for caja_id in self.rois.keys():
-                        roi_polygon = self._build_roi_polygon(caja_id)
-                        if self._point_in_roi((feet_x, feet_y), roi_polygon):
-                            client_type = self.tracks[track_id].get("type", "sinCarro")
-                            current_counts[caja_id].append(client_type)
-                            in_any_roi = True
-                            break
+                in_any_roi = False
+                for caja_id in self.rois.keys():
+                    roi_polygon = self._build_roi_polygon(caja_id)
+                    if self._point_in_roi((feet_x, feet_y), roi_polygon):
+                        current_counts[caja_id].append("sinCarro")
+                        in_any_roi = True
+                        break
 
-                    color = (0, 255, 0)      # Las cajas de las personas son siempre verdes (requisito de UI)
-                    client_type = self.tracks[track_id].get("type", "sinCarro")
-                    cv2.rectangle(frame, (x1, y1), (x2, y2), color, 1)
-
-                    # Si el cliente lleva carro, asegurar que se dibuje una caja naranja (física o estimada virtual)
-                    if client_type == "conCarro":
-                        has_physical_cart = False
-                        p_center = ((x1 + x2) / 2, (y1 + y2) / 2)
-                        for cx1, cy1, cx2, cy2 in getattr(self, "last_cart_boxes", []):
-                            c_center = ((cx1 + cx2) / 2, (cy1 + cy2) / 2)
-                            if np.sqrt((p_center[0] - c_center[0])**2 + (p_center[1] - c_center[1])**2) < self.cart_association_threshold:
-                                has_physical_cart = True
-                                break
-                        
-                        if not has_physical_cart:
-                            pw = x2 - x1
-                            ph = y2 - y1
-                            # Orientar la caja virtual según la mitad de la pantalla en la que se encuentre
-                            if x1 < frame.shape[1] / 2:
-                                cx1 = x1
-                                cy1 = y1 + int(ph * 0.45)
-                                cx2 = x1 + int(pw * 0.55)
-                                cy2 = y2
-                            else:
-                                cx1 = x2 - int(pw * 0.55)
-                                cy1 = y1 + int(ph * 0.45)
-                                cx2 = x2
-                                cy2 = y2
-                            cv2.rectangle(frame, (cx1, cy1), (cx2, cy2), (0, 165, 255), 1)  # Naranja fino
-            else:
-                for x1, y1, x2, y2 in person_boxes:
-                    feet_x = int((x1 + x2) / 2)
-                    feet_y = y2
-                    client_type = "sinCarro"  # valor por defecto si la persona no entra en ninguna ROI
-
-                    in_any_roi = False
-                    for caja_id in self.rois.keys():
-                        roi_polygon = self._build_roi_polygon(caja_id)
-                        if self._point_in_roi((feet_x, feet_y), roi_polygon):
-                            # Para el fallback, determinar tipo usando self.last_cart_boxes y heurística híbrida
-                            p_center = ((x1 + x2) / 2, (y1 + y2) / 2)
-                            p_feet = (feet_x, feet_y)
-                            for cx1, cy1, cx2, cy2 in getattr(self, "last_cart_boxes", []):
-                                c_center = ((cx1 + cx2) / 2, (cy1 + cy2) / 2)
-                                dist_centers = np.sqrt((p_center[0] - c_center[0])**2 + (p_center[1] - c_center[1])**2)
-                                dist_feet = np.sqrt((p_feet[0] - c_center[0])**2 + (p_feet[1] - c_center[1])**2)
-                                if dist_centers < self.cart_association_threshold or dist_feet < self.cart_association_threshold:
-                                    client_type = "conCarro"
-                                    break
-                            
-                            # Heurística híbrida basada en dimensiones de la caja si no se detectó carro por proximidad
-                            if client_type == "sinCarro":
-                                pw = x2 - x1
-                                ph = y2 - y1
-                                if ph > 0:
-                                    aspect_ratio = pw / ph
-                                    if aspect_ratio > 0.45 or pw > 63:
-                                        client_type = "conCarro"
-
-                                current_counts[caja_id].append(client_type)
-                                in_any_roi = True
-                                break
-
-                    color = (0, 255, 0)      # Las cajas de las personas son siempre verdes (requisito de UI)
-                    cv2.rectangle(frame, (x1, y1), (x2, y2), color, 1)
-
-                    # Dibujar carro estimado en el bucle fallback si corresponde
-                    if client_type == "conCarro":
-                        has_physical_cart = False
-                        p_center = ((x1 + x2) / 2, (y1 + y2) / 2)
-                        for cx1, cy1, cx2, cy2 in getattr(self, "last_cart_boxes", []):
-                            c_center = ((cx1 + cx2) / 2, (cy1 + cy2) / 2)
-                            if np.sqrt((p_center[0] - c_center[0])**2 + (p_center[1] - c_center[1])**2) < self.cart_association_threshold:
-                                has_physical_cart = True
-                                break
-                        
-                        if not has_physical_cart:
-                            pw = x2 - x1
-                            ph = y2 - y1
-                            if x1 < frame.shape[1] / 2:
-                                cx1 = x1
-                                cy1 = y1 + int(ph * 0.45)
-                                cx2 = x1 + int(pw * 0.55)
-                                cy2 = y2
-                            else:
-                                cx1 = x2 - int(pw * 0.55)
-                                cy1 = y1 + int(ph * 0.45)
-                                cx2 = x2
-                                cy2 = y2
-                            cv2.rectangle(frame, (cx1, cy1), (cx2, cy2), (0, 165, 255), 1)  # Naranja fino
-
-            # Dibujar los carros detectados (para visualización premium bajo el capó)
-            if hasattr(self, "last_cart_boxes"):
-                for cx1, cy1, cx2, cy2 in self.last_cart_boxes:
-                    cv2.rectangle(frame, (cx1, cy1), (cx2, cy2), (0, 165, 255), 1)  # Naranja fino
+                color = (0, 255, 0)      # Las cajas de las personas son siempre verdes (requisito de UI)
+                cv2.rectangle(frame, (x1, y1), (x2, y2), color, 1)
 
             self.counts = current_counts
 
@@ -1028,10 +885,9 @@ class VisionEngine:
             text_x = roi_polygon[3][0]
             text_y = roi_polygon[3][1] + 20
             personas = len(self.counts[caja_id])
-            carros = self.counts[caja_id].count("conCarro")
             cv2.putText(
                 frame,
-                f"Caja {caja_id}: {personas} + {carros}",
+                f"Caja {caja_id}: {personas}",
                 (text_x, text_y),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.6,
@@ -1042,10 +898,9 @@ class VisionEngine:
         # Panel superior de información general
         cv2.rectangle(frame, (15, 10), (510, 45), (0, 0, 0), -1)
         total_personas = sum(len(cola) for cola in self.counts.values())
-        total_carros = sum(cola.count("conCarro") for cola in self.counts.values())
         cv2.putText(
             frame,
-            f"MSQ - Personas: {total_personas} (Carros: {total_carros}) | FPS: {self.fps}",
+            f"MSQ - Personas: {total_personas} | FPS: {self.fps}",
             (20, 35),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.65,
