@@ -42,12 +42,15 @@ export const patchCajaEstado = (id, estado) =>
 //  WebSocket
 
 function buildWsUrl(path) {
-  // Los WebSockets se conectan directamente al backend, sin pasar por el proxy
-  // de Vite. FastAPI no aplica CORSMiddleware a conexiones WS, por lo que no
-  // hay problema de CORS. Usar el proxy de Vite para WS es poco fiable.
-  const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000'
-  const wsBase = backendUrl.replace(/^http/, 'ws')
-  return `${wsBase}${API_PREFIX}${path}`
+  if (import.meta.env.DEV) {
+    // En desarrollo, conecta directamente al backend para evitar problemas con el proxy WS de Vite
+    const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000'
+    const wsBase = backendUrl.replace(/^http/, 'ws')
+    return `${wsBase}${API_PREFIX}${path}`
+  }
+  // En producción, URL relativa al host actual para que nginx haga el proxy
+  const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
+  return `${protocol}//${location.host}${API_PREFIX}${path}`
 }
 
 /**

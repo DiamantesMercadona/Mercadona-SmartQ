@@ -84,8 +84,14 @@ let lastFpsTs = 0
 
 function connectVideoViewer() {
   const apiPrefix = import.meta.env.VITE_API_PREFIX || '/api/v1'
-  const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000'
-  const wsUrl = backendUrl.replace(/^http/, 'ws') + apiPrefix + '/ws/video/events'
+  let wsUrl
+  if (import.meta.env.DEV) {
+    const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000'
+    wsUrl = backendUrl.replace(/^http/, 'ws') + apiPrefix + '/ws/video/events'
+  } else {
+    const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
+    wsUrl = `${protocol}//${location.host}${apiPrefix}/ws/video/events`
+  }
 
   viewerStatus.value = 'connecting'
   viewerWs = new WebSocket(wsUrl)
