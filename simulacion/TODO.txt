@@ -1,1 +1,1 @@
-- Mejorar labels de las cajas y tipo de las letras de la similacion
+- Falsear llegada de clientes, añadir un json con los datos de cada oleada de clientes
