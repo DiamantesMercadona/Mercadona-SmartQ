@@ -15,7 +15,7 @@ export const nivelarColasAlAbrir = ref(false)
 export const oleadasRandom = ref(false)
 
 /** Si es true, el ciclo de oleadas predefinidas se reinicia al llegar al final del array. */
-export const oleadasLoop = ref(true)
+export const oleadasLoop = ref(false)
 
 //  Oleadas de llegada
 
