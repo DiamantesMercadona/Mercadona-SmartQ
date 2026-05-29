@@ -1,49 +1,62 @@
+# ------------------------------------------------------------------
+# CONFIGURACIÓN GENERAL - MERCADONA SMARTQ (MSQ)
+# ------------------------------------------------------------------
+# Este módulo define el diccionario centralizado de configuración de la
+# aplicación. Agrupa parámetros del motor de visión artificial (YOLO),
+# infraestructura de persistencia (SQLite y Redis) y las reglas de negocio
+# del algoritmo de toma de decisiones para la gestión de colas.
+
+from pathlib import Path
+
+# Obtener la raíz del proyecto (directorio padre de 'backend')
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
 CONFIG = {
-    # Configuración de Entorno y Hardware
-    "APP": {
-        "mode": "DEBUG",                    # "DEBUG" o "PRODUCTION"
-        "input_source_type": "webcam",      # "webcam", "video" o "image"
-        "source_index": 0,                  # ID de la cámara (Webcam = 0)
-        "default_image": "backend/resources/test_photo.jpg",        # Imagen por defecto para pruebas
-        "default_video": "backend/resources/3d_demo.webm",      # Video de prueba por defecto
-        "default_source": "backend/resources/3d_demo.webm",     # Fuente por defecto si se usa un archivo
-        "yolo_model": "yolov8n.pt",                                 # Modelo YOLO original para detección de personas
-    },
-
-    # Infraestructura y Persistencia
-    "DATABASE": {
-        "redis_host": "localhost",      # Host de Redis
-        "redis_port": 6379,             # Puerto de Redis
-        "redis_db": 0,                  # Base logica de Redis
-        "redis_video_channel": "msq:video:events",  # Canal Pub/Sub para eventos del simulador
-        "db_path": "msq.db",            # Archivo SQLite para almacenamiento local
-        "cadencia_grabacion_seg": 5,    # Intervalo de guardado en SQLite
-    },
-
-    # Parámetros del Motor de Visión
+    # ------------------------------------------------------------------
+    # Configuración del Motor de Visión Artificial
+    # ------------------------------------------------------------------
     "VISION": {
-        "cluster_radius_px": 120,       # Radio DBSCAN para agrupar personas, en píxeles
-        "roi_columns": 3,               # Columnas de áreas ROI
-        "roi_rows": 2,                  # Filas de áreas ROI (3x2 = 6 áreas)
-        "roi_margin_x": 40,             # Margen horizontal de las áreas ROI
-        "roi_margin_top": 120,          # Margen superior de las áreas ROI
-        "roi_margin_bottom": 40,        # Margen inferior de las áreas ROI
+        "video_source": "ws",                # Fuente de vídeo activa ("ws" para simulación 3D por WS, "demo" para vídeo demo local)
+        "yolo_model": "yolov8s.pt",          # Modelo YOLOv8 a cargar para la detección de personas
+        "yolo_imgsz": 640,                   # Resolución en píxeles de la imagen de entrada para inferencia
+        "yolo_confidence": 0.20,             # Umbral de confianza mínimo de detección (bajar para más recall)
+        "yolo_iou": 0.45,                    # Umbral de Intersection over Union (IoU) para Non-Maximum Suppression (NMS)
+        "yolo_frame_skip": 1,                # Factor de omisión de fotogramas para inferencia (1 = procesar todos)
+        "cart_association_threshold": 120,   # Umbral de distancia en píxeles para emparejar carros con personas
+ 
+        # ------------------------------------------------------------------
+        # Fuente WebSocket (simulación 3D)
+        # Actívese pasando source="ws" o source="ws://..." a VisionEngine.
+        # ------------------------------------------------------------------
+        "ws_url": "ws://localhost:8000/api/v1/ws/video/events",  # Endpoint WS de salida del backend
+        "ws_frame_width": 1904,              # Ancho del frame
+        "ws_frame_height": 935,              # Alto del frame
+    },
+ 
+    # ------------------------------------------------------------------
+    # Configuración de Persistencia y Mensajería
+    # ------------------------------------------------------------------
+    "DATABASE": {
+        "db_path": str((_PROJECT_ROOT / "backend/msq.db").resolve()),         # Ruta física local del archivo SQLite para el histórico
+        "redis_host": "localhost",                                            # Dirección del servidor de mensajería rápida Redis
+        "redis_port": 6379,                                                   # Puerto TCP de conexión para el servidor de Redis
+        "redis_db": 0,                                                        # Índice de base de datos lógica de Redis a utilizar
+        "redis_video_channel": "msq:video:events",                            # Canal Pub/Sub para transmisión de eventos en simulación
     },
 
-    # Lógica de Negocio y Algoritmo de Decisión
+    # ------------------------------------------------------------------
+    # Configuración del Algoritmo de Toma de Decisiones
+    # ------------------------------------------------------------------
     "DECISION": {
-        "peso_persona": 1.5,            # Minutos de trabajo por persona
-        "peso_carrito": 4.5,            # Minutos de trabajo por carrito
-        
-        "umbral_tiempo_alerta": 8,      # Minutos de TEE para ABRIR caja
-        "umbral_grupos_max": 5,         # Grupos máximos para ABRIR caja (Saturación física)
-        
-        "umbral_tiempo_cierre": 2.5,    # Minutos de TEE para CERRAR caja
-        "umbral_grupos_min": 2,         # Grupos mínimos para CERRAR caja
-        "tiempo_gracia_cierre": 20,     # Segundos del cronómetro de cortesía
-        
-        "cajas_totales": 6,             # Límite físico del supermercado
-        "cooldown_abrir": 15,           # Segundos de bloqueo tras abrir caja
-        "cooldown_cerrar": 20           # Segundos de bloqueo tras cerrar caja
+        "cajas_totales": 6,                  # Límite máximo de cajas físicas instaladas en la tienda
+        "peso_persona": 1.5,                 # Peso estimado en minutos asignado a cada persona con cesta
+        "peso_carrito": 4.5,                 # Peso estimado en minutos asignado a cada persona con carro
+        "umbral_tiempo_alerta": 8,           # Minutos de tiempo de espera límite para activar sugerencia de APERTURA
+        "umbral_tiempo_cierre": 2.5,         # Minutos de tiempo de espera mínimo para sugerencia de CIERRE
+        "umbral_grupos_max": 5,              # Personas toleradas por cola física antes de saturar una caja
+        "umbral_grupos_min": 2,              # Personas en cola por debajo del cual es apta para cerrar caja
+        "cooldown_abrir": 15,                # Tiempo de bloqueo en segundos tras abrir caja (evita oscilaciones)
+        "cooldown_cerrar": 20,               # Tiempo de bloqueo en segundos tras cerrar caja (evita oscilaciones)
+        "tiempo_gracia_cierre": 20,          # Período de gracia en segundos antes de consolidar el cierre definitivo
     }
 }
