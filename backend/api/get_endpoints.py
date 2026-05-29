@@ -1,31 +1,131 @@
-from fastapi import APIRouter, HTTPException
-from .database import get_queues
+from fastapi import APIRouter, HTTPException, Query
+from typing import Annotated
+import sys
+from pathlib import Path
+
+# Agregar el directorio backend al path
+BACKEND_DIR = Path(__file__).resolve().parent.parent
+if str(BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(BACKEND_DIR))
+
+from database import DatabaseMSQ
+
+try:
+    from .db_helpers import get_queues
+except ImportError:
+    from db_helpers import get_queues
 
 router = APIRouter()
+
 
 @router.get("/queues")
 async def get_all_queues():
     """
-    Obtener el estado de todas las colas.
+    Compatibilidad con la simulacion: devuelve las cajas como colas.
     """
     try:
-        queues = get_queues()
-        return {"queues": queues}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return {"queues": get_queues()}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
 
 @router.get("/queues/{queue_id}")
-async def get_queue(queue_id: int):
+async def get_queue(queue_id: str):
     """
-    Obtener el estado de una cola específica por ID.
+    Compatibilidad con la simulacion: obtiene una caja/cola por ID.
     """
     try:
-        queues = get_queues()
-        queue = next((q for q in queues if q["id"] == queue_id), None)
-        if not queue:
+        queue = next((q for q in get_queues() if str(q["id"]) == str(queue_id)), None)
+        if queue is None:
             raise HTTPException(status_code=404, detail="Cola no encontrada")
         return queue
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.get("/cajas")
+async def get_cajas():
+    try:
+        with DatabaseMSQ() as db:
+            return {"cajas": db.obtener_cajas()}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.get("/cajas/{id_caja}")
+async def get_caja(id_caja: str):
+    try:
+        with DatabaseMSQ() as db:
+            caja = db.obtener_caja(id_caja)
+        if caja is None:
+            raise HTTPException(status_code=404, detail="Caja no encontrada")
+        return caja
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.get("/instantaneas")
+async def get_instantaneas(limite: Annotated[int, Query(ge=1, le=1000)] = 10):
+    try:
+        with DatabaseMSQ() as db:
+            return {"instantaneas": db.obtener_instantaneas(limite=limite)}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.get("/metricas")
+async def get_metricas(
+    id_caja: str | None = None,
+    desde: str | None = None,
+    hasta: str | None = None,
+    limite: Annotated[int, Query(ge=1, le=10000)] = 1000,
+    solo_global: bool = False,
+):
+    try:
+        with DatabaseMSQ() as db:
+            metricas = db.obtener_metricas(
+                id_caja=id_caja,
+                desde=desde,
+                hasta=hasta,
+                limite=limite,
+                solo_global=solo_global,
+            )
+        return {"metricas": metricas}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.get("/empleados")
+async def get_empleados(activos: bool = False):
+    try:
+        with DatabaseMSQ() as db:
+            return {"empleados": db.listar_empleados(activos=activos)}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.get("/empleados/{id_empleado}")
+async def get_empleado(id_empleado: int):
+    try:
+        with DatabaseMSQ() as db:
+            empleado = db.obtener_empleado(id_empleado)
+        if empleado is None:
+            raise HTTPException(status_code=404, detail="Empleado no encontrado")
+        return empleado
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.get("/turnos")
+async def get_turnos(dia_semana: str | None = None, turno: str | None = None):
+    try:
+        with DatabaseMSQ() as db:
+            return {"turnos": db.obtener_turnos(dia_semana=dia_semana, turno=turno)}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
