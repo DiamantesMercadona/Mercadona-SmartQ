@@ -4,6 +4,7 @@ import {
   MAX_TIME_CAJA,
   MIN_TIME_CAJA_CARRITO,
   MAX_TIME_CAJA_CARRITO,
+  PROBABILIDAD_CARRITO,
 } from './simulacionConfig.js'
 
 class Cliente {
@@ -12,7 +13,8 @@ class Cliente {
     this.imagen = getPersonaDistinta(colaActual.map((c) => c.imagen))
     this.color = 0xffffff * Math.random()
     // this.imgCarrito = null
-    this.imgCarrito = Math.random() < 0.35 ? getRandomCarrito() : null
+    this.imgCarrito =
+      PROBABILIDAD_CARRITO > 0 && Math.random() < PROBABILIDAD_CARRITO ? getRandomCarrito() : null
 
     if (this.imgCarrito) {
       this.tiempoEnCaja =

@@ -3,11 +3,14 @@ import { getCajas, getQueues } from '../services/backendApi.js'
 import {
   simulationSpeed,
   nivelarColasAlAbrir,
+  oleadasRandom,
+  oleadasLoop,
   MIN_TIME_EVENT,
   MAX_TIME_EVENT,
   MIN_CLIENTS_EVENT,
   MAX_CLIENTS_EVENT,
 } from './simulacionConfig.js'
+import { oleadas } from './oleadas.js'
 
 /** El backend usa 'activa' para caja abierta y 'cerrada' para caja cerrada. */
 const STATUS_ABIERTA = ['activa', 'abierta'] // añado 'Abierta' por si acaso.
@@ -15,6 +18,7 @@ const STATUS_ABIERTA = ['activa', 'abierta'] // añado 'Abierta' por si acaso.
 class Simulacion {
   async inicializar() {
     this.cajas = []
+    this._oleadaIndex = 0
     try {
       // getQueues incluye `length` (nº de clientes) calculado desde la última instantánea
       const queues = await getQueues()
@@ -127,11 +131,19 @@ class Simulacion {
   }
 
   eventoSimulacion() {
+    if (oleadasRandom.value) {
+      this._eventoAleatorio()
+    } else {
+      this._eventoOleada()
+    }
+  }
+
+  _eventoAleatorio() {
     const n_clientes =
       Math.floor(Math.random() * (MAX_CLIENTS_EVENT - MIN_CLIENTS_EVENT + 1)) + MIN_CLIENTS_EVENT
     const tiempo_evento =
       Math.floor(Math.random() * (MAX_TIME_EVENT - MIN_TIME_EVENT + 1)) + MIN_TIME_EVENT
-    console.log('Evento de simulación', { n_clientes, tiempo_evento })
+    console.log('Evento de simulación aleatorio', { n_clientes, tiempo_evento })
 
     for (let i = 0; i < n_clientes; i++) {
       const numeroCaja = this.seleccionarCaja()
@@ -148,6 +160,38 @@ class Simulacion {
         this.eventoSimulacion()
       },
       (tiempo_evento * 1000) / simulationSpeed.value,
+    )
+  }
+
+  _eventoOleada() {
+    if (oleadas.length === 0) return
+
+    const oleada = oleadas[this._oleadaIndex % oleadas.length]
+    console.log(`Evento de simulación — oleada ${this._oleadaIndex + 1}:`, oleada)
+
+    for (let i = 0; i < oleada.clientes; i++) {
+      const numeroCaja = this.seleccionarCaja()
+      if (numeroCaja !== null) {
+        const c = this.agregarCliente(numeroCaja)
+        if (c) console.log(`[Oleada] Cliente agregado a caja ${numeroCaja} (${c.tiempoEnCaja}s)`)
+      }
+    }
+
+    this._oleadaIndex++
+    if (this._oleadaIndex >= oleadas.length) {
+      if (!oleadasLoop.value) {
+        console.log('[Simulacion] Ciclo de oleadas completado. No se reinicia.')
+        return
+      }
+      console.log('[Simulacion] Ciclo de oleadas completado. Reiniciando desde la primera oleada.')
+      this._oleadaIndex = 0
+    }
+
+    setTimeout(
+      () => {
+        this.eventoSimulacion()
+      },
+      (oleada.delay * 1000) / simulationSpeed.value,
     )
   }
 }

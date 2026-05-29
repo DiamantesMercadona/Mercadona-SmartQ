@@ -29,3 +29,32 @@ Los tiempos y parámetros que controlan el comportamiento de la simulación (fre
 ```
 src/models/simulacionConfig.js
 ```
+
+## Oleadas de clientes
+
+Los clientes llegan a las cajas en **oleadas** periódicas. El comportamiento se controla con las siguientes variables en `src/models/simulacionConfig.js`:
+
+| Variable | Tipo | Por defecto | Descripción |
+|---|---|---|---|
+| `oleadasRandom` | `ref(bool)` | `false` | `true` → oleadas aleatorias, `false` → oleadas predefinidas |
+| `oleadasLoop` | `ref(bool)` | `true` | Solo en modo predefinido: si `true`, el ciclo se reinicia al terminar el array |
+
+### Modo aleatorio (`oleadasRandom = true`)
+
+Cada oleada genera entre `MIN_CLIENTS_EVENT` y `MAX_CLIENTS_EVENT` clientes distribuidos en las cajas abiertas con menos cola. El intervalo entre oleadas es aleatorio entre `MIN_TIME_EVENT` y `MAX_TIME_EVENT` segundos.
+
+### Modo predefinido (`oleadasRandom = false`)
+
+Se recorre el array `oleadas` definido en `src/models/oleadas.js`. Cada entrada indica cuántos clientes llegan y cuántos segundos hay que esperar hasta la siguiente:
+
+```js
+{ clientes: 9, delay: 60 }
+```
+
+Cada cliente se asigna automáticamente a la caja abierta con menos cola. Si `oleadasLoop` es `false`, la simulación se detiene al terminar el array; si es `true`, vuelve a empezar desde la primera oleada.
+
+Para añadir o modificar escenarios, edita directamente el array en `src/models/oleadas.js`.
+
+### Factor de velocidad
+
+Todos los tiempos (intervalo entre oleadas, tiempo de atención en caja) se dividen por el factor de velocidad global, ajustable con el slider del panel de controles (0.5×–20×).

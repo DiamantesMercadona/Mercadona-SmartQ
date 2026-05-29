@@ -1,1 +1,0 @@
-- Falsear llegada de clientes, añadir un json con los datos de cada oleada de clientes
