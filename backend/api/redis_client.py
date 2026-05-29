@@ -4,21 +4,25 @@ from typing import AsyncIterator
 import sys
 from pathlib import Path
 
-from redis.asyncio import Redis
-
 # Manejar importaciones relativas y absolutas
 try:
     from ..config import CONFIG
 except ImportError:
-    # Si falla la importación relativa, agregar backend al path
     BACKEND_DIR = Path(__file__).resolve().parent.parent
     if str(BACKEND_DIR) not in sys.path:
         sys.path.insert(0, str(BACKEND_DIR))
     from config import CONFIG
 
+_USE_FAKE_REDIS = CONFIG["DATABASE"]["use_fake_redis"]
+
 
 @lru_cache(maxsize=1)
-def get_redis_client() -> Redis:
+def get_redis_client():
+    if _USE_FAKE_REDIS:
+        import fakeredis.aioredis
+        return fakeredis.aioredis.FakeRedis()
+
+    from redis.asyncio import Redis
     redis_config = CONFIG["DATABASE"]
     return Redis(
         host=redis_config["redis_host"],

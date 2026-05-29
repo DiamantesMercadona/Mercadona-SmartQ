@@ -114,7 +114,7 @@ const props = defineProps({
 const container = ref(null)
 const cajas = computed(() => props.simulacion?.cajas ?? [])
 
-const saveFrames = ref(false)
+const saveFrames = ref(true)
 const isRecordingVideo = ref(false)
 const recordingElapsedSeconds = ref(0)
 const cameraMode = ref(CAMARA_POR_DEFECTO)

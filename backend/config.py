@@ -42,6 +42,7 @@ CONFIG = {
         "redis_port": 6379,                                                   # Puerto TCP de conexión para el servidor de Redis
         "redis_db": 0,                                                        # Índice de base de datos lógica de Redis a utilizar
         "redis_video_channel": "msq:video:events",                            # Canal Pub/Sub para transmisión de eventos en simulación
+        "use_fake_redis": True,                                               # True para usar fakeredis en memoria (sin servidor Redis)
     },
 
     # ------------------------------------------------------------------
