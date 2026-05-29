@@ -1,26 +1,16 @@
-from fastapi import APIRouter, HTTPException, Response, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Body, HTTPException, Response, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 from datetime import datetime, timezone
 from typing import Any
 
-try:
-    from .redis_client import (
-        get_latest_video_payload,
-        get_video_channel,
-        ping_redis,
-        publish_video_payload,
-        subscribe_video_payloads,
-        subscribe_bytes,
-    )
-except ImportError:
-    from redis_client import (
-        get_latest_video_payload,
-        get_video_channel,
-        ping_redis,
-        publish_video_payload,
-        subscribe_video_payloads,
-        subscribe_bytes,
-    )
+from .redis_client import (
+    get_latest_video_payload,
+    get_video_channel,
+    ping_redis,
+    publish_video_payload,
+    subscribe_video_payloads,
+    subscribe_bytes,
+)
 
 router = APIRouter()
 
