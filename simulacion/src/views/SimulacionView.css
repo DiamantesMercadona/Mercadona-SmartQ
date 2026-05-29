@@ -1,0 +1,95 @@
+.simulacion-view {
+  position: relative;
+}
+
+/*  Panel derecho (cajas + backend-status) */
+
+.right-panel {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.cajas-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(17, 24, 39, 0.85);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 4px 16px rgba(2, 6, 23, 0.5);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  min-width: 210px;
+}
+
+.cajas-panel-title {
+  font-size: 10px;
+  color: #64748b;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 2px;
+}
+
+.caja-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.caja-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.caja-dot.open {
+  background: #10b981;
+  box-shadow: 0 0 4px rgba(16, 185, 129, 0.7);
+}
+
+.caja-dot.closed {
+  background: #ef4444;
+  box-shadow: 0 0 4px rgba(239, 68, 68, 0.5);
+}
+
+.caja-id {
+  font-size: 11px;
+  color: #e2e8f0;
+  width: 18px;
+}
+
+.caja-cola {
+  font-size: 10px;
+  color: #64748b;
+  flex: 1;
+}
+
+.caja-btn {
+  padding: 2px 8px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 4px;
+  background: rgba(30, 41, 59, 0.8);
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 10px;
+  transition:
+    background 0.15s,
+    color 0.15s;
+}
+
+.caja-btn:hover:not(:disabled) {
+  background: rgba(51, 65, 85, 0.9);
+  color: #e2e8f0;
+}
+
+.caja-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}

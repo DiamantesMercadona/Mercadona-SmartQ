@@ -1,9 +1,6 @@
 import * as THREE from 'three'
-import { ref } from 'vue'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { getFacesRandomDependiente, getRandomPersona } from '@/utils/imagesUtils'
-
-export const simulationSpeed = ref(1)
 
 const GLTF_CAJA_PATH = '/assets/3dmodels/psx_cashier_stand/scene.gltf'
 const SIZE_CAJA = 1.5
@@ -13,6 +10,7 @@ const ESPACIO_GRUPOS = 2.5
 const FACE_SCALE = 0.75
 const CARRITO_SCALE = 2.3
 const CARRITO_POSITION = new THREE.Vector3(1.5, -0.5, 0)
+const OFFSET_X_CAJAS = -2
 
 // Local z in grupo space for animation endpoints.
 // Grupo is at world z = -12, so:
@@ -21,7 +19,7 @@ const CARRITO_POSITION = new THREE.Vector3(1.5, -0.5, 0)
 const ENTRY_Z = 28
 const EXIT_Z = -4
 
-// ─── Animation system ─────────────────────────────────────────────────────────
+//  Animation system
 
 const activeAnimations = []
 
@@ -36,7 +34,7 @@ function easeIn(t) {
 export function tickAnimations() {
   for (let i = activeAnimations.length - 1; i >= 0; i--) {
     const anim = activeAnimations[i]
-    anim.t = Math.min(1, anim.t + anim.speed * simulationSpeed.value)
+    anim.t = Math.min(1, anim.t + anim.speed)
     anim.mesh.position.lerpVectors(anim.from, anim.to, anim.easing(anim.t))
     if (anim.t >= 1) {
       anim.onComplete?.()
@@ -59,14 +57,14 @@ function startAnimation(mesh, from, to, speed, easing, onComplete) {
   })
 }
 
-// ─── Client helpers ────────────────────────────────────────────────────────────
+//  Client helpers
 
 function computeClientPos(i) {
-  const side = i % 2 === 0 ? -0.55 : 0.55
-  return new THREE.Vector3(1.2 + side + Math.sin(i * 2.3) * 0.12, 1.5, 2.4 + i * 1.8)
+  const side = i % 2 === 0 ? -0.9 : 0.9
+  return new THREE.Vector3(3.6 + side + Math.sin(i * 2.3) * 0.25, 1.5, 2.4 + i * 1.8)
 }
 
-// ─── Character creators ────────────────────────────────────────────────────────
+//  Character creators
 
 export function cargarModeloCaja() {
   return new Promise((resolve) => {
@@ -142,7 +140,7 @@ export function crearCliente(data) {
   return g
 }
 
-// ─── Queue management ──────────────────────────────────────────────────────────
+//  Queue management
 
 // Instant placement — used only when building the scene from scratch.
 export function actualizarCola(grupo, cola) {
@@ -187,19 +185,22 @@ export function sincronizarCola(grupo, cola) {
   }
 }
 
-// ─── Scene management ─────────────────────────────────────────────────────────
+//  Scene management
 
 function crearCajaGrupo(caja, x, cajaModelo) {
   const grupo = new THREE.Group()
-  grupo.position.set(x, 0, -12)
+  grupo.position.set(x + OFFSET_X_CAJAS, 0, -12)
   grupo.userData.caja = caja
   grupo.userData.clientes = []
 
-  grupo.add(cajaModelo.clone())
+  const mesh = cajaModelo.clone()
+  mesh.rotation.y = Math.PI / 2
+  grupo.add(mesh)
 
   if (caja.dependiente) {
     const dep = crearDependiente(caja.dependiente)
-    dep.position.set(1, 0, 0)
+    dep.position.set(0.4, 0, -1.3)
+    dep.rotation.y = Math.PI / 2
     grupo.add(dep)
     grupo.userData.dependiente = dep
   } else {
@@ -244,7 +245,8 @@ export function syncScene(cajas, cajasMesh) {
     const depActual = grupo.userData.dependiente
     if (caja.dependiente && !depActual) {
       const dep = crearDependiente(caja.dependiente)
-      dep.position.set(1, 0, 0)
+      dep.position.set(0.4, 0, -1.3)
+      dep.rotation.y = Math.PI / 2
       grupo.add(dep)
       grupo.userData.dependiente = dep
     } else if (!caja.dependiente && depActual) {

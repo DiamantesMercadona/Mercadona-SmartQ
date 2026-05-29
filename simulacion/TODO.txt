@@ -1,2 +1,0 @@
-- Probar nuevo render con el motor de deteccion de personas
-- Integracion con el backebd

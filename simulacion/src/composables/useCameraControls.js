@@ -1,16 +1,12 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
+import { POSICIONES_CAMARA } from './camarasConfig.js'
 
 const CAMERA_SPEED = 0.12
 
-export const POSICIONES_CAMARA = {
-  libre: new THREE.Vector3(-0.24, 10.91, 16.99),
-  frontal: new THREE.Vector3(-0.24, 10.91, 16.99),
-  cenital: new THREE.Vector3(0.34, 22.14, 6.6),
-}
-
 export function initCameraControls(camera, renderer, initialMode) {
   const controls = new OrbitControls(camera, renderer.domElement)
+  controls.target.copy(POSICIONES_CAMARA[initialMode].lookAt)
   controls.enableDamping = true
   controls.enabled = initialMode === 'libre'
   controls.enablePan = true
@@ -34,7 +30,10 @@ export function initCameraControls(camera, renderer, initialMode) {
       return
     }
     controls.enabled = false
-    camera.position.copy(POSICIONES_CAMARA[mode])
+    const { position, lookAt } = POSICIONES_CAMARA[mode]
+    camera.position.copy(position)
+    controls.target.copy(lookAt)
+    camera.lookAt(lookAt)
     controls.update()
   }
 

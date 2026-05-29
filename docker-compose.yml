@@ -1,4 +1,16 @@
 services:
+  simulacion:
+    build: ./simulacion
+    ports:
+      - "8081:80"
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+  frontend:
+    build: ./frontend
+    ports:
+      - "8080:80"
+    restart: unless-stopped
   redis_mercadona:
     image: redis:latest
     container_name: redis_mercadona

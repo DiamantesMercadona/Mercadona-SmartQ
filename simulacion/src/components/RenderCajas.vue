@@ -5,14 +5,14 @@
   <div class="controls-panel">
     <label>
       Velocidad: <strong>{{ simulationSpeed.toFixed(2) }}x</strong>
-      <input type="range" v-model.number="simulationSpeed" min="0.25" max="5" step="0.25" />
+      <input type="range" v-model.number="simulationSpeed" min="0.5" max="20" step="0.5" />
     </label>
     <label>
       Cámara:
       <select v-model="cameraMode">
-        <option value="libre">Libre</option>
-        <option value="frontal">Frontal</option>
-        <option value="cenital">Cenital</option>
+        <option v-for="key in Object.keys(POSICIONES_CAMARA)" :key="key" :value="key">
+          {{ key.charAt(0).toUpperCase() + key.slice(1) }}
+        </option>
       </select>
     </label>
     <label class="toggle">
@@ -32,6 +32,7 @@
     </button>
     <span v-if="isRecordingVideo" class="recording-time">{{ recordingElapsedLabel }}</span>
     <button @click="downloadFrame" class="btn-download">Descargar frame</button>
+    <RouterLink to="/video-stream" class="btn-backend-test">Video stream</RouterLink>
   </div>
 
   <!-- Tooltips for cajas -->
@@ -49,9 +50,16 @@
 
   <!-- Free camera position panel -->
   <div v-if="mostrarReferenciasEspaciales && cameraMode === 'libre'" class="camera-pos-panel">
+    <span class="camera-pos-label">Posición</span>
     <code class="camera-pos-coords"
       >new THREE.Vector3({{ camera.position.x.toFixed(2) }}, {{ camera.position.y.toFixed(2) }},
       {{ camera.position.z.toFixed(2) }})</code
+    >
+    <span class="camera-pos-label">Mirando hacia</span>
+    <code class="camera-pos-coords"
+      >new THREE.Vector3({{ camControls?.controls?.target?.x.toFixed(2) }},
+      {{ camControls?.controls?.target?.y.toFixed(2) }},
+      {{ camControls?.controls?.target?.z.toFixed(2) }})</code
     >
     <button
       class="btn-copy-coords"
@@ -65,9 +73,10 @@
 
 <script setup>
 import { ref, onMounted, onBeforeUnmount, computed, watch } from 'vue'
+import { RouterLink } from 'vue-router'
 import './RenderCajas.css'
 import * as THREE from 'three'
-import FrameStreamer from '@/utils/frameStreamer.js'
+import { VideoWS } from '@/services/backendApi.js'
 import { createVideoRecorder } from '@/utils/videoRecorder.js'
 
 import { crearFondoEscena, crearSuelo, crearLuces } from '@/composables/useSceneSetup.js'
@@ -78,13 +87,25 @@ import {
   renderizarCajas,
   syncScene,
   tickAnimations,
-  simulationSpeed,
 } from '@/composables/useCajasScene.js'
-import { initCameraControls, POSICIONES_CAMARA } from '@/composables/useCameraControls.js'
+import { simulationSpeed } from '@/models/simulacionConfig.js'
+import { initCameraControls } from '@/composables/useCameraControls.js'
+import { POSICIONES_CAMARA, CAMARA_POR_DEFECTO } from '@/composables/camarasConfig.js'
 import { useReferenciasEspaciales } from '@/composables/useReferenciasEspaciales.js'
 
 const SUELO_LARGO = 40
 const SUELO_ANCHO = 32
+
+const FPS_SEND_RENDER = 24
+
+// Resolución fija de renderización — debe coincidir con el vídeo de demo (3d_demo.webm).
+// El buffer del renderer siempre se mantiene a esta resolución para que los frames
+// enviados al backend por WebSocket sean idénticos al vídeo de referencia.
+// CSS escala el canvas para que llene el contenedor sin cambiar el buffer.
+const RENDER_WIDTH = 1904
+const RENDER_HEIGHT = 935
+
+const VIDEO_RECORDING_FPS = 30
 
 const props = defineProps({
   simulacion: { type: Object, default: null },
@@ -96,7 +117,7 @@ const cajas = computed(() => props.simulacion?.cajas ?? [])
 const saveFrames = ref(false)
 const isRecordingVideo = ref(false)
 const recordingElapsedSeconds = ref(0)
-const cameraMode = ref('libre')
+const cameraMode = ref(CAMARA_POR_DEFECTO)
 const mostrarReferenciasEspaciales = ref(false)
 const mostrarLabels = ref(false)
 const posicionCopiada = ref(false)
@@ -106,7 +127,7 @@ const refEspaciales = useReferenciasEspaciales(SUELO_LARGO, SUELO_ANCHO)
 
 let scene, camera, renderer, animationId, cajaModelo, camControls, videoRecorder
 const cajasMesh = []
-const frameStreamer = new FrameStreamer()
+const frameStreamer = new VideoWS()
 
 const recordingElapsedLabel = computed(() => {
   const m = Math.floor(recordingElapsedSeconds.value / 60)
@@ -118,16 +139,15 @@ async function init() {
   scene = new THREE.Scene()
   scene.background = crearFondoEscena()
 
-  camera = new THREE.PerspectiveCamera(
-    55,
-    container.value.clientWidth / container.value.clientHeight,
-    0.1,
-    100,
-  )
-  camera.position.copy(POSICIONES_CAMARA[cameraMode.value])
+  // Aspecto fijo: coincide con RENDER_WIDTH/RENDER_HEIGHT para coherencia con el backend
+  camera = new THREE.PerspectiveCamera(55, RENDER_WIDTH / RENDER_HEIGHT, 0.1, 100)
+  camera.position.copy(POSICIONES_CAMARA[cameraMode.value].position)
 
   renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true })
-  renderer.setSize(container.value.clientWidth, container.value.clientHeight)
+  // Buffer fijo a RENDER_WIDTH×RENDER_HEIGHT; CSS llena el contenedor sin cambiar el buffer
+  renderer.setSize(RENDER_WIDTH, RENDER_HEIGHT)
+  renderer.domElement.style.width = '100%'
+  renderer.domElement.style.height = '100%'
   renderer.shadowMap.enabled = true
   container.value.appendChild(renderer.domElement)
 
@@ -155,8 +175,9 @@ async function init() {
 
   if (saveFrames.value) {
     frameStreamer
-      .startStreaming(renderer, 10)
-      .catch((e) => console.error('FrameStreamer error:', e))
+      .connect()
+      .then(() => frameStreamer.startStreaming(renderer, FPS_SEND_RENDER))
+      .catch((e) => console.error('[VideoWS] Error al conectar:', e))
   }
   window.addEventListener('resize', onResize)
 }
@@ -176,16 +197,20 @@ function animate() {
 }
 
 function onResize() {
-  if (!container.value) return
-  camera.aspect = container.value.clientWidth / container.value.clientHeight
-  camera.updateProjectionMatrix()
-  renderer.setSize(container.value.clientWidth, container.value.clientHeight)
+  // El buffer del renderer es fijo (RENDER_WIDTH×RENDER_HEIGHT); solo el CSS cambia de tamaño.
+  // La cámara mantiene el aspect ratio de renderización para coherencia con el backend.
+  // No hay nada que actualizar: el canvas ya tiene width/height en 100% y el contenedor
+  // absorbe el resize del navegador.
 }
 
 function copiarPosicionCamara() {
   const { x, y, z } = camera.position
+  const t = camControls.controls.target
   navigator.clipboard.writeText(
-    `new THREE.Vector3(${x.toFixed(2)}, ${y.toFixed(2)}, ${z.toFixed(2)})`,
+    `newCameraPos: {\n` +
+      `    position: new THREE.Vector3(${x.toFixed(2)}, ${y.toFixed(2)}, ${z.toFixed(2)}),\n` +
+      `    lookAt: new THREE.Vector3(${t.x.toFixed(2)}, ${t.y.toFixed(2)}, ${t.z.toFixed(2)}),\n` +
+      `  },`,
   )
   posicionCopiada.value = true
   setTimeout(() => (posicionCopiada.value = false), 1500)
@@ -209,7 +234,10 @@ function downloadFrame() {
 
 function toggleVideoRecording() {
   if (!videoRecorder && renderer) {
-    videoRecorder = createVideoRecorder(renderer, { fps: 30, filenamePrefix: 'render' })
+    videoRecorder = createVideoRecorder(renderer, {
+      fps: VIDEO_RECORDING_FPS,
+      filenamePrefix: 'render',
+    })
   }
   if (isRecordingVideo.value) {
     videoRecorder?.stop()
@@ -238,9 +266,10 @@ watch(saveFrames, async (val) => {
   if (val) {
     if (!renderer) return
     try {
-      await frameStreamer.startStreaming(renderer, 10)
+      await frameStreamer.connect()
+      frameStreamer.startStreaming(renderer, FPS_SEND_RENDER)
     } catch (e) {
-      console.error('No se pudo iniciar FrameStreamer:', e)
+      console.error('[VideoWS] No se pudo conectar:', e)
       saveFrames.value = false
     }
   } else {
