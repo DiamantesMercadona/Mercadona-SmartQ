@@ -106,5 +106,38 @@ async def subscribe_video_payloads(include_latest: bool = False) -> AsyncIterato
         yield payload
 
 
+def get_processed_video_channel() -> str:
+    return CONFIG["DATABASE"].get("redis_processed_video_channel", "msq:video:processed:events")
+
+
+def get_processed_video_latest_key() -> str:
+    return f"{get_processed_video_channel()}:latest"
+
+
+async def publish_processed_video_payload(payload: bytes) -> int:
+    """
+    Guarda el ultimo frame procesado y lo publica en el canal Redis de video procesado.
+    """
+    await set_bytes(get_processed_video_latest_key(), payload)
+    return await publish_bytes(get_processed_video_channel(), payload)
+
+
+async def get_latest_processed_video_payload() -> bytes | None:
+    return await get_bytes(get_processed_video_latest_key())
+
+
+async def subscribe_processed_video_payloads(include_latest: bool = False) -> AsyncIterator[bytes]:
+    """
+    Escucha el canal Redis de video procesado y produce siempre bytes para WebSocket.
+    """
+    if include_latest:
+        latest = await get_latest_processed_video_payload()
+        if latest is not None:
+            yield latest
+
+    async for payload in subscribe_bytes(get_processed_video_channel()):
+        yield payload
+
+
 async def ping_redis() -> bool:
     return bool(await get_redis_client().ping())

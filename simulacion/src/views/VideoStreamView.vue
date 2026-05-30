@@ -24,8 +24,8 @@
 
     <!-- Visor WS -->
     <section class="viewer-section">
-      <h3>WS /ws/video/events</h3>
-      <p class="description">Visor de frames en tiempo real del simulador</p>
+      <h3>WS /ws/video/processed/events</h3>
+      <p class="description">Visor de la cámara inteligente y análisis de colas en tiempo real</p>
       <div class="viewer-controls">
         <button @click="toggleVideoViewer">
           {{ viewerConnected ? 'Desconectar' : 'Conectar' }}
@@ -87,10 +87,10 @@ function connectVideoViewer() {
   let wsUrl
   if (import.meta.env.DEV) {
     const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000'
-    wsUrl = backendUrl.replace(/^http/, 'ws') + apiPrefix + '/ws/video/events'
+    wsUrl = backendUrl.replace(/^http/, 'ws') + apiPrefix + '/ws/video/processed/events'
   } else {
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
-    wsUrl = `${protocol}//${location.host}${apiPrefix}/ws/video/events`
+    wsUrl = `${protocol}//${location.host}${apiPrefix}/ws/video/processed/events`
   }
 
   viewerStatus.value = 'connecting'

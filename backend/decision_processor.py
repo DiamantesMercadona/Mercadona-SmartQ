@@ -166,21 +166,59 @@ class ProcesadorDecisionesMSQ:
     # SINCRONIZACIÓN BD
     # ─────────────────────────────────────────────────────────────────────────
 
-    def sincronizar_cajas_db(self):
-        """Garantiza que la tabla 'cajas' refleje el estado decidido por el algoritmo."""
+    def sincronizar_cajas_db(self, abrir_count: int = 0, cerrar_count: int = 0, forzar_secuencial: bool = False):
+        """Garantiza que la tabla 'cajas' refleje el estado de la base de datos o algoritmo."""
         try:
             with DatabaseMSQ() as db:
-                cajas_db = {c["id"]: c["estado"] for c in db.obtener_cajas()}
+                cajas_db = db.obtener_cajas()
+                cajas_dict = {c["id"]: c["estado"] for c in cajas_db}
 
+                # Asegurar de que existan las cajas
                 for i in range(1, self.cajas_totales + 1):
                     id_caja = str(i)
-                    estado_deseado = "abierta" if i <= self.cajas_abiertas else "cerrada"
+                    if id_caja not in cajas_dict:
+                        estado_inicial = "abierta" if i == 1 else "cerrada"
+                        db.crear_caja(id=id_caja, estado=estado_inicial)
+                        cajas_dict[id_caja] = estado_inicial
+                        print(f"📦 [SISTEMA] Caja {id_caja} dada de alta como '{estado_inicial}'.")
 
-                    if id_caja not in cajas_db:
-                        db.crear_caja(id=id_caja, estado=estado_deseado)
-                        print(f"📦 [SISTEMA] Caja {id_caja} dada de alta como '{estado_deseado}'.")
-                    elif cajas_db[id_caja] != estado_deseado:
-                        db.actualizar_caja(id=id_caja, estado=estado_deseado)
+                if forzar_secuencial or (abrir_count == 0 and cerrar_count == 0):
+                    # Comportamiento clásico/secuencial (por compatibilidad con tests e inicialización)
+                    for i in range(1, self.cajas_totales + 1):
+                        id_caja = str(i)
+                        estado_deseado = "abierta" if i <= self.cajas_abiertas else "cerrada"
+                        
+                        # Comprobar si ya existe la caja en DB y si está abierta pero no tiene cajero asignado
+                        caja_db_item = next((c for c in cajas_db if c["id"] == id_caja), None)
+                        sin_cajero = caja_db_item and caja_db_item.get("id_empleado") is None
+                        
+                        if cajas_dict.get(id_caja) != estado_deseado or (estado_deseado == "abierta" and sin_cajero):
+                            db.actualizar_caja(id=id_caja, estado=estado_deseado)
+                            cajas_dict[id_caja] = estado_deseado
+                else:
+                    # Comportamiento dinámico no-secuencial (respeta aperturas manuales)
+                    if abrir_count > 0:
+                        abiertas = 0
+                        for i in range(1, self.cajas_totales + 1):
+                            id_caja = str(i)
+                            if cajas_dict.get(id_caja) == "cerrada":
+                                db.actualizar_caja(id=id_caja, estado="abierta")
+                                cajas_dict[id_caja] = "abierta"
+                                print(f"📦 [SISTEMA] Caja {id_caja} abierta automáticamente por afluencia.")
+                                abiertas += 1
+                                if abiertas >= abrir_count:
+                                    break
+                    elif cerrar_count > 0:
+                        cerradas = 0
+                        for i in range(self.cajas_totales, 1, -1):
+                            id_caja = str(i)
+                            if cajas_dict.get(id_caja) == "abierta":
+                                db.actualizar_caja(id=id_caja, estado="cerrada")
+                                cajas_dict[id_caja] = "cerrada"
+                                print(f"📦 [SISTEMA] Caja {id_caja} cerrada automáticamente por baja afluencia.")
+                                cerradas += 1
+                                if cerradas >= cerrar_count:
+                                    break
         except Exception as e:
             print(f"[ERROR DB] Fallo al sincronizar cajas: {e}")
 
@@ -303,6 +341,16 @@ class ProcesadorDecisionesMSQ:
     # ─────────────────────────────────────────────────────────────────────────
 
     def evaluar_estado(self):
+        # Sincronizar el contador self.cajas_abiertas con las cajas realmente abiertas en la base de datos
+        try:
+            with DatabaseMSQ() as db:
+                cajas_db = db.obtener_cajas()
+                abiertas_db = [c for c in cajas_db if c["estado"] in ("abierta", "activa")]
+                if abiertas_db:
+                    self.cajas_abiertas = len(abiertas_db)
+        except Exception as e:
+            print(f"[ERROR DB] Al obtener cajas para sincronizar contador en evaluar_estado: {e}")
+
         cestas, carros, grupos = self.obtener_datos_camara()
 
         if cestas == 0 and carros == 0 and self.cajas_abiertas == 1:
@@ -349,9 +397,9 @@ class ProcesadorDecisionesMSQ:
 
             if tiempo_desde_cambio > self.cooldown_abrir:
                 a_abrir = cajas_objetivo - self.cajas_abiertas
-                self.cajas_abiertas += a_abrir
                 self.ultimo_cambio = time.time()
-                self.sincronizar_cajas_db()
+                self.sincronizar_cajas_db(abrir_count=a_abrir)
+                self.cajas_abiertas += a_abrir
 
                 razon = (
                     f"TEE EMA excedido ({tendencia})"
@@ -380,10 +428,10 @@ class ProcesadorDecisionesMSQ:
                             zona_peligro = umbral_abrir_efectivo * 0.85
 
                             if tee_proyectado < zona_peligro:
-                                self.cajas_abiertas -= 1
                                 self.ultimo_cambio = time.time()
                                 self.inicio_calma_sostenida = None
-                                self.sincronizar_cajas_db()
+                                self.sincronizar_cajas_db(cerrar_count=1)
+                                self.cajas_abiertas -= 1
                                 print("📉 CIERRE CONFIRMADO: Cerrando 1 caja.")
                             else:
                                 print("🛡️  PREVENCIÓN: Cierre abortado. TEE proyectado en zona de peligro.")

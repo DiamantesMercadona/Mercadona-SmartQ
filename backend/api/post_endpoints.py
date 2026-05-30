@@ -124,11 +124,27 @@ async def actualizar_caja(id_caja: str, update: CajaUpdate):
     data = update.model_dump(exclude_unset=True)
     if not data:
         raise HTTPException(status_code=400, detail="No hay campos para actualizar")
+    if "estado" in data and data["estado"] == "activa":
+        data["estado"] = "abierta"
 
     try:
         with DatabaseMSQ() as db:
             actualizado = db.actualizar_caja(id=id_caja, **data)
             caja = db.obtener_caja(id_caja) if actualizado else None
+            
+            # Si la caja se abre y hay un empleado asignado, avisar a su pulsera
+            if caja and update.estado in ("activa", "abierta") and caja.get("id_empleado"):
+                emp = db.obtener_empleado(caja["id_empleado"])
+                if emp and emp.get("id_pulsera"):
+                    import json
+                    payload = json.dumps({
+                        "pulsera_id": emp["id_pulsera"],
+                        "evento": f"ABRIR_CAJA_{id_caja}",
+                        "timestamp": datetime.now(timezone.utc).isoformat()
+                    }).encode("utf-8")
+                    await publish_bytes("canal_pulsera", payload)
+                    print(f"[API] Señal enviada a la pulsera {emp['id_pulsera']} para abrir Caja {id_caja}")
+
         if not actualizado:
             raise HTTPException(status_code=404, detail="Caja no encontrada")
         return {"message": "Caja actualizada correctamente", "caja": caja}

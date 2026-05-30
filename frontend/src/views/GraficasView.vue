@@ -201,7 +201,9 @@ onMounted(loadMetrics)
   <main class="graphics-page">
     <section class="page-shell">
       <header class="hero">
-        <RouterLink class="back-link" :to="{ name: 'menu' }">Volver al menu</RouterLink>
+        <RouterLink class="back-link" :to="{ name: 'menu' }">
+          <span class="back-arrow">←</span> Volver al menú
+        </RouterLink>
         <span class="kicker">SmartQ</span>
 
         <div class="hero-content">
@@ -377,9 +379,19 @@ onMounted(loadMetrics)
 
 .back-link {
   width: fit-content;
-  color: #d71920;
+  color: #00843d;
   font-weight: 800;
   text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.95rem;
+  transition: all 0.2s ease;
+}
+
+.back-link:hover {
+  color: #00662f;
+  transform: translateX(-4px);
 }
 
 .kicker {

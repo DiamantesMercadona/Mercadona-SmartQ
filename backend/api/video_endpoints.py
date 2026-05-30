@@ -10,6 +10,9 @@ from .redis_client import (
     publish_video_payload,
     subscribe_video_payloads,
     subscribe_bytes,
+    get_processed_video_channel,
+    publish_processed_video_payload,
+    subscribe_processed_video_payloads,
 )
 
 router = APIRouter()
@@ -170,3 +173,55 @@ async def display_stream(websocket: WebSocket):
         return
     except Exception as exc:
         await websocket.close(code=1011, reason=f"Error leyendo eventos de display: {exc}")
+
+
+# ---------------------------------------------------------
+# VIDEO PROCESADO: WEBSOCKET ENTRADA
+# ---------------------------------------------------------
+
+@router.websocket("/ws/video/processed")
+async def video_processed_stream(websocket: WebSocket):
+    """
+    WebSocket para recibir frames procesados y anotados (JPEG binario)
+    desde el motor de visión (VisionEngine) y publicarlos en Redis.
+    """
+    await websocket.accept()
+    channel = get_processed_video_channel()
+
+    try:
+        while True:
+            payload = await websocket.receive_bytes()
+            subscribers = await publish_processed_video_payload(payload)
+
+            await websocket.send_bytes(
+                f"Frame procesado publicado en Redis; channel={channel}; subscribers={subscribers}".encode("utf-8")
+            )
+
+    except WebSocketDisconnect:
+        return
+    except RuntimeError:
+        await websocket.close(code=1003, reason="Solo se aceptan mensajes binarios")
+    except Exception as exc:
+        await websocket.close(code=1011, reason=f"Error publicando frame procesado en Redis: {exc}")
+
+
+# ---------------------------------------------------------
+# VIDEO PROCESADO: WEBSOCKET SALIDA
+# ---------------------------------------------------------
+
+@router.websocket("/ws/video/processed/events")
+async def video_processed_events_stream(websocket: WebSocket):
+    """
+    WebSocket de salida para reenviar a clientes los frames anotados (JPEG binario)
+    publicados en Redis.
+    """
+    await websocket.accept()
+
+    try:
+        async for payload in subscribe_processed_video_payloads(include_latest=True):
+            await websocket.send_bytes(payload)
+
+    except WebSocketDisconnect:
+        return
+    except Exception as exc:
+        await websocket.close(code=1011, reason=f"Error leyendo de Redis: {exc}")

@@ -24,10 +24,11 @@ class Simulacion {
       // getQueues incluye `length` (nº de clientes) calculado desde la última instantánea
       const queues = await getQueues()
       for (const q of queues) {
-        const caja = new Caja(q.id, {
-          abierta: STATUS_ABIERTA.includes(q.status),
-          colaLength: q.length ?? 0,
-        })
+        const caja = new Caja(
+          q.id,
+          STATUS_ABIERTA.includes(q.status),
+          q.length ?? 0
+        )
         this.cajas.push(caja)
       }
       console.log(`[Simulacion] ${queues.length} cajas cargadas desde el backend`)

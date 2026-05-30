@@ -209,6 +209,97 @@ class WsVideoSource:
             return None
 
 
+class WsVideoSender:
+    """
+    Cliente WebSocket para enviar frames JPEG procesados al backend en segundo plano.
+    """
+
+    def __init__(self, url: str) -> None:
+        self._url = url
+        self._queue: queue.Queue = queue.Queue(maxsize=4)
+        self._stop_event = threading.Event()
+        self._thread: Optional[threading.Thread] = None
+        self._loop: Optional[asyncio.AbstractEventLoop] = None
+
+    def start(self) -> None:
+        """Arranca el hilo de transmisión de frames en background."""
+        self._stop_event.clear()
+        self._thread = threading.Thread(
+            target=self._run_loop,
+            daemon=True,
+            name="WsVideoSender",
+        )
+        self._thread.start()
+
+    def stop(self) -> None:
+        """Señaliza el cierre y espera a que el hilo termine."""
+        self._stop_event.set()
+        if self._loop and not self._loop.is_closed():
+            self._loop.call_soon_threadsafe(self._loop.stop)
+        if self._thread:
+            self._thread.join(timeout=2.0)
+
+    def send_frame(self, frame_bytes: bytes) -> None:
+        """Coloca un frame en la cola de envío en segundo plano (no bloqueante)."""
+        if self._stop_event.is_set():
+            return
+        if self._queue.full():
+            try:
+                # Descartar el frame más antiguo para evitar latencia (backpressure)
+                self._queue.get_nowait()
+            except queue.Empty:
+                pass
+        try:
+            self._queue.put_nowait(frame_bytes)
+        except queue.Full:
+            pass
+
+    def _run_loop(self) -> None:
+        self._loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self._loop)
+        try:
+            self._loop.run_until_complete(self._send_frames())
+        except Exception as exc:
+            print(f"[WsVideoSender] Error en el loop asyncio: {exc}")
+        finally:
+            self._loop.close()
+
+    async def _send_frames(self) -> None:
+        import websockets
+
+        while not self._stop_event.is_set():
+            try:
+                async with websockets.connect(
+                    self._url,
+                    ping_interval=20,
+                    ping_timeout=10,
+                    close_timeout=5,
+                ) as ws:
+                    print(f"[WsVideoSender] Conectado a {self._url}")
+                    while not self._stop_event.is_set():
+                        # Obtener frame de la cola usando executor para no bloquear el event loop de asyncio
+                        frame_bytes = await self._loop.run_in_executor(None, self._get_next_frame)
+                        if frame_bytes is None:
+                            if self._stop_event.is_set():
+                                break
+                            await asyncio.sleep(0.03) # Espera muy corta si la cola está vacía
+                            continue
+                        await ws.send(frame_bytes)
+            except OSError as exc:
+                print(f"[WsVideoSender] No se pudo conectar a {self._url}: {exc}")
+            except Exception as exc:
+                print(f"[WsVideoSender] Error inesperado en transmisión: {exc}")
+
+            if not self._stop_event.is_set():
+                await asyncio.sleep(2.0)
+
+    def _get_next_frame(self) -> Optional[bytes]:
+        try:
+            return self._queue.get(timeout=0.05)
+        except queue.Empty:
+            return None
+
+
 # Declara la clase VisionEngine, responsable del procesamiento de vídeo en tiempo real,
 # detección e identificación de colas de clientes utilizando modelos de Deep Learning.
 class VisionEngine:
@@ -283,10 +374,16 @@ class VisionEngine:
             self._ws_source.start()
             self.cap = self._ws_source          # interfaz compatible (isOpened / read / release)
 
+            # Inicializar el emisor de vídeo procesado a partir de la URL de entrada
+            ws_processed_url = source.replace("/ws/video/events", "/ws/video/processed")
+            self._ws_sender = WsVideoSender(ws_processed_url)
+            self._ws_sender.start()
+
             # Dimensiones de frame para los cálculos de ROI (configurables, sin VideoCapture)
             frame_w = vision_cfg.get("ws_frame_width", 1280)
-            print(f"[VisionEngine] Modo WebSocket activado. URL: {source}")
+            print(f"[VisionEngine] Modo WebSocket activado. URL entrada: {source} | URL salida: {ws_processed_url}")
         else:
+            self._ws_sender = None
             # Modo tradicional: archivo de vídeo o cámara física
             self._ws_source = None
             if source is None or source in ("demo"):
@@ -308,11 +405,12 @@ class VisionEngine:
         self.window_margin = 80
         self.window_scale_min = 0.75
 
-        # Inicialización segura de la ventana de renderizado de OpenCV
-        try:
-            cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
-        except cv2.error:
-            pass
+        # Inicialización segura de la ventana de renderizado de OpenCV (solo si no es modo WS)
+        if not self._ws_mode:
+            try:
+                cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
+            except cv2.error:
+                pass
 
         # Cargar configuración del modelo YOLOv8 desde la configuración global o establecer valores por defecto
         yolo_model = vision_cfg.get("yolo_model", "yolov8n.pt")
@@ -391,7 +489,7 @@ class VisionEngine:
         for caja_id in self.rois.keys():
             if not self.db.obtener_caja(id=caja_id):
                 try:
-                    self.db.crear_caja(id=caja_id, estado="abierta")
+                    self.db.crear_caja(id=caja_id, estado="abierta" if caja_id == "1" else "cerrada")
                     print(f"[VisionEngine] Caja '{caja_id}' registrada en la base de datos.")
                 except sqlite3.IntegrityError:
                     pass
@@ -419,6 +517,8 @@ class VisionEngine:
         """
         # release() funciona igual para cv2.VideoCapture y WsVideoSource
         self.cap.release()
+        if hasattr(self, "_ws_sender") and self._ws_sender:
+            self._ws_sender.stop()
         try:
             cv2.destroyAllWindows()
         except cv2.error:
@@ -815,25 +915,33 @@ class VisionEngine:
 
             # Dibujar elementos gráficos y ajustar el frame para visualización segura
             self._draw_interface(frame)
+
+            # Transmitir el frame procesado y anotado si estamos en modo WS
+            if self._ws_mode and hasattr(self, "_ws_sender") and self._ws_sender:
+                ret_enc, encoded_img = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+                if ret_enc:
+                    self._ws_sender.send_frame(encoded_img.tobytes())
+
             display_frame = self._fit_frame_to_screen(frame)
 
-            # Control de redimensionamiento e interfaz a prueba de fallos GUI / Headless
-            try:
-                if cv2.getWindowProperty(self.window_name, cv2.WND_PROP_VISIBLE) >= 0:
-                    cv2.resizeWindow(
-                        self.window_name, display_frame.shape[1], display_frame.shape[0]
-                    )
-                    cv2.imshow(self.window_name, display_frame)
-                else:
-                    break
-            except cv2.error:
-                pass
+            # Control de redimensionamiento e interfaz a prueba de fallos (solo si no es modo WS)
+            if not self._ws_mode:
+                try:
+                    if cv2.getWindowProperty(self.window_name, cv2.WND_PROP_VISIBLE) >= 0:
+                        cv2.resizeWindow(
+                            self.window_name, display_frame.shape[1], display_frame.shape[0]
+                        )
+                        cv2.imshow(self.window_name, display_frame)
+                    else:
+                        break
+                except cv2.error:
+                    pass
 
-            try:
-                if cv2.waitKey(1) & 0xFF == ord("q"):
-                    break
-            except cv2.error:
-                pass
+                try:
+                    if cv2.waitKey(1) & 0xFF == ord("q"):
+                        break
+                except cv2.error:
+                    pass
 
             # Control exacto de FPS mediante retardos precisos
             elapsed = time.time() - frame_start
@@ -894,19 +1002,6 @@ class VisionEngine:
                 (255, 0, 0),
                 1,
             )
-
-        # Panel superior de información general
-        cv2.rectangle(frame, (15, 10), (510, 45), (0, 0, 0), -1)
-        total_personas = sum(len(cola) for cola in self.counts.values())
-        cv2.putText(
-            frame,
-            f"MSQ - Personas: {total_personas} | FPS: {self.fps}",
-            (20, 35),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.65,
-            (0, 255, 0),
-            1,
-        )
 
     # Redimensiona el fotograma manteniendo la relación de aspecto para ajustarse a las cotas físicas de la pantalla.
     def _fit_frame_to_screen(self, frame: np.ndarray) -> np.ndarray:
