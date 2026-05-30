@@ -19,6 +19,7 @@ from fastapi.testclient import TestClient
 try:
     from api.post_endpoints import router as post_router
 except ImportError:
+    # pyrefly: ignore [missing-import]
     from .api.post_endpoints import router as post_router
 
 # ------------------------------------------------------------------
