@@ -92,6 +92,7 @@ import { simulationSpeed } from '@/models/simulacionConfig.js'
 import { initCameraControls } from '@/composables/useCameraControls.js'
 import { POSICIONES_CAMARA, CAMARA_POR_DEFECTO } from '@/composables/camarasConfig.js'
 import { useReferenciasEspaciales } from '@/composables/useReferenciasEspaciales.js'
+import { workerSetInterval, workerClearInterval } from '@/utils/workerTimer.js'
 
 const SUELO_LARGO = 40
 const SUELO_ANCHO = 32
@@ -128,6 +129,30 @@ const refEspaciales = useReferenciasEspaciales(SUELO_LARGO, SUELO_ANCHO)
 let scene, camera, renderer, animationId, cajaModelo, camControls, videoRecorder
 const cajasMesh = []
 const frameStreamer = new VideoWS()
+
+// Loop de fondo: sustituye a rAF cuando la pestaña está oculta para que las
+// animaciones de clientes y el canvas sigan actualizándose (rAF se pausa en tabs ocultas).
+// Debe coincidir con FPS_SEND_RENDER para evitar frames duplicados en el stream.
+let backgroundLoopId = null
+
+function startBackgroundLoop() {
+  if (backgroundLoopId !== null) return
+  backgroundLoopId = workerSetInterval(() => {
+    if (!renderer) return
+    tickAnimations()
+    renderer.render(scene, camera)
+  }, 1000 / FPS_SEND_RENDER)
+}
+
+function stopBackgroundLoop() {
+  workerClearInterval(backgroundLoopId)
+  backgroundLoopId = null
+}
+
+function onVisibilityChange() {
+  if (document.hidden) startBackgroundLoop()
+  else stopBackgroundLoop()
+}
 
 const recordingElapsedLabel = computed(() => {
   const m = Math.floor(recordingElapsedSeconds.value / 60)
@@ -172,6 +197,8 @@ async function init() {
   })
 
   animate()
+  document.addEventListener('visibilitychange', onVisibilityChange)
+  if (document.hidden) startBackgroundLoop()
 
   if (saveFrames.value) {
     frameStreamer
@@ -308,6 +335,8 @@ onMounted(init)
 
 onBeforeUnmount(() => {
   cancelAnimationFrame(animationId)
+  document.removeEventListener('visibilitychange', onVisibilityChange)
+  stopBackgroundLoop()
   window.removeEventListener('resize', onResize)
   window.removeEventListener('keydown', camControls?.onKeyDown)
   window.removeEventListener('keyup', camControls?.onKeyUp)

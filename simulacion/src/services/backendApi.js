@@ -7,6 +7,7 @@
  */
 
 import axios from 'axios'
+import { workerSetInterval, workerClearInterval } from '../utils/workerTimer.js'
 
 const API_PREFIX = import.meta.env.VITE_API_PREFIX || '/api/v1'
 
@@ -82,8 +83,7 @@ export class VideoWS {
   status = 'idle'
 
   #socket = null
-  #rafId = null
-  #lastFrameTime = 0
+  #streamingId = null
 
   // Worker para codificación JPEG off-thread
   #worker = null
@@ -214,7 +214,7 @@ export class VideoWS {
 
   /**
    * Inicia el envío periódico de frames.
-   * Usa requestAnimationFrame para sincronizar con el ciclo de render del navegador.
+   * Usa un worker timer para no detenerse cuando la ventana pierde el foco.
    * Por defecto se usa la resolución nativa del canvas (sin downscale), igual
    * que en la grabación local. Pasar maxCaptureWidth para limitarla si se
    * necesita reducir el ancho de banda.
@@ -236,27 +236,18 @@ export class VideoWS {
     this.#needsResize = scale < 1
 
     const intervalMs = 1000 / fps
-    this.#lastFrameTime = 0
     this.#capturing = false
     this.#encoding = false
 
-    const loop = (timestamp) => {
-      this.#rafId = requestAnimationFrame(loop)
-      // Time-gating: solo iniciamos una captura si ha pasado suficiente tiempo
-      if (timestamp - this.#lastFrameTime < intervalMs) return
-      this.#lastFrameTime = timestamp
+    this.#streamingId = workerSetInterval(() => {
       this.sendFrame(canvasOrRenderer) // async, fire-and-forget
-    }
-
-    this.#rafId = requestAnimationFrame(loop)
+    }, intervalMs)
   }
 
   /** Detiene el envío de frames sin cerrar la conexión ni destruir el worker. */
   stopStreaming() {
-    if (this.#rafId !== null) {
-      cancelAnimationFrame(this.#rafId)
-      this.#rafId = null
-    }
+    workerClearInterval(this.#streamingId)
+    this.#streamingId = null
     this.#capturing = false
     this.#encoding = false
   }
