@@ -113,7 +113,7 @@ python decision_processor.py
 
 ## 🧪 Pruebas unitarias
 
-El proyecto cuenta con una batería de pruebas unitarias para validar de forma automatizada el funcionamiento de la base de datos, el motor de visión y los endpoints de la API.
+El proyecto cuenta con una batería de pruebas unitarias para validar de forma automatizada el funcionamiento de la base de datos, el motor de visión, el motor de decisiones y los endpoints de la API.
 
 Puedes ejecutar todas las pruebas desde la raíz del proyecto con la siguiente instrucción:
 
