@@ -208,9 +208,9 @@ onMounted(loadMetrics)
 
         <div class="hero-content">
           <div>
-            <h1>Graficas y estadisticas</h1>
+            <h1>Gráficas y estadísticas</h1>
             <p>
-              Consulta la evolucion del tiempo medio de espera registrado en la tabla de metricas.
+              Consulta la evolución del tiempo medio de espera registrado en la tabla de métricas.
             </p>
           </div>
 
@@ -233,7 +233,7 @@ onMounted(loadMetrics)
           </label>
 
           <label>
-            Limite
+            Límite
             <select v-model.number="selectedLimit" :disabled="loading" @change="loadMetrics">
               <option :value="50">50 registros</option>
               <option :value="100">100 registros</option>
@@ -249,7 +249,7 @@ onMounted(loadMetrics)
       </header>
 
       <p v-if="errorMessage" class="status-message error" role="alert">{{ errorMessage }}</p>
-      <p v-else-if="loading" class="status-message">Cargando metricas...</p>
+      <p v-else-if="loading" class="status-message">Cargando métricas...</p>
 
       <section class="stats-grid" aria-label="Resumen de metricas">
         <article class="stat-card">
@@ -265,9 +265,9 @@ onMounted(loadMetrics)
         </article>
 
         <article class="stat-card">
-          <span>Maximo</span>
+          <span>Máximo</span>
           <strong>{{ formatSeconds(maxWait) }}</strong>
-          <small>Minimo {{ formatSeconds(minWait) }}</small>
+          <small>Mínimo {{ formatSeconds(minWait) }}</small>
         </article>
 
         <article class="stat-card">
@@ -283,7 +283,7 @@ onMounted(loadMetrics)
         <article class="chart-card">
           <div class="section-heading">
             <div>
-              <h2>Evolucion temporal</h2>
+              <h2>Evolución temporal</h2>
               <p>Tiempo medio de espera por muestra registrada.</p>
             </div>
             <span>{{ filteredMetrics.length }} puntos</span>
@@ -303,7 +303,7 @@ onMounted(loadMetrics)
           </div>
 
           <div v-else class="empty-state">
-            No hay metricas para este filtro.
+            No hay métricas para este filtro.
           </div>
         </article>
 
@@ -331,7 +331,7 @@ onMounted(loadMetrics)
 
           <article class="panel-block">
             <div class="section-heading compact">
-              <h2>Ultimas metricas</h2>
+              <h2>Últimas métricas</h2>
               <span>{{ recentMetrics.length }}</span>
             </div>
 

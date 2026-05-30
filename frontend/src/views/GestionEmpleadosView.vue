@@ -321,9 +321,9 @@ onMounted(loadData)
         <span class="kicker">SmartQ</span>
         <div class="hero-content">
           <div>
-            <h1>Gestion de empleados</h1>
+            <h1>Gestión de empleados</h1>
             <p>
-              Organiza el personal por turnos de lunes a sabado usando los datos guardados en la
+              Organiza el personal por turnos de lunes a sábado usando los datos guardados en la
               base de datos.
             </p>
           </div>
@@ -373,7 +373,7 @@ onMounted(loadData)
         </label>
 
         <button type="submit" :disabled="savingEmployee">
-          {{ savingEmployee ? 'Guardando...' : 'Anadir empleado' }}
+          {{ savingEmployee ? 'Guardando...' : 'Añadir empleado' }}
         </button>
       </form>
 
@@ -387,7 +387,7 @@ onMounted(loadData)
 
           <div class="shift-block">
             <div class="shift-heading">
-              <h3>Manana</h3>
+              <h3>Mañana</h3>
               <span>{{ day.morning.length }} empleados</span>
             </div>
 
@@ -407,7 +407,7 @@ onMounted(loadData)
                 :disabled="loading || !shiftSelections[selectionKey(day, 'morning')]"
                 @click="addEmployeeToShift(day, 'morning')"
               >
-                Anadir
+                Añadir
               </button>
             </div>
 
@@ -484,7 +484,7 @@ onMounted(loadData)
                 :disabled="loading || !shiftSelections[selectionKey(day, 'afternoon')]"
                 @click="addEmployeeToShift(day, 'afternoon')"
               >
-                Anadir
+                Añadir
               </button>
             </div>
 

@@ -17,7 +17,7 @@
           :class="['btn-connection', wsStatus]"
         >
           <span class="status-indicator-dot"></span>
-          {{ isConnected ? 'Desconectar Cámara' : 'Conectar Cámara' }}
+          {{ isConnected ? 'Desconectar cámara' : 'Conectar cámara' }}
         </button>
       </div>
     </header>
@@ -25,31 +25,38 @@
     <!-- Metrics Cards Row -->
     <section class="metrics-row">
       <div class="metric-card">
-        <div class="metric-icon">📡</div>
+        <div class="metric-icon">{{ congestionLevel.icon }}</div>
         <div class="metric-details">
-          <span class="metric-label">Estado de Transmisión</span>
-          <span :class="['metric-value', wsStatus]">{{ statusLabel }}</span>
+          <span class="metric-label">Nivel de congestión</span>
+          <span :class="['metric-value', congestionLevel.class]">{{ congestionLevel.text }}</span>
         </div>
       </div>
       <div class="metric-card">
         <div class="metric-icon">🛒</div>
         <div class="metric-details">
-          <span class="metric-label">Cajas Abiertas</span>
+          <span class="metric-label">Cajas abiertas</span>
           <span class="metric-value">{{ activeCajasCount }} / 6</span>
         </div>
       </div>
       <div class="metric-card">
         <div class="metric-icon">👥</div>
         <div class="metric-details">
-          <span class="metric-label">Clientes en Espera</span>
+          <span class="metric-label">Clientes en cola</span>
           <span class="metric-value">{{ totalQueueLength }}</span>
         </div>
       </div>
       <div class="metric-card">
         <div class="metric-icon">⏱️</div>
         <div class="metric-details">
-          <span class="metric-label">Espera Media Real</span>
+          <span class="metric-label">Tiempo medio de espera</span>
           <span class="metric-value">{{ formattedAverageWaitTime }} min</span>
+        </div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-icon">🧑‍✈️</div>
+        <div class="metric-details">
+          <span class="metric-label">Siguiente cajero</span>
+          <span class="metric-value" :class="nextEmployeeOnDutyClass">{{ nextEmployeeOnDuty }}</span>
         </div>
       </div>
     </section>
@@ -61,7 +68,7 @@
         <div class="visualizer-header">
           <span class="visualizer-title">
             <span class="live-badge" v-if="isConnected">DIRECTO</span>
-            Cajas de la salida de Calle Roger de Lauria
+            Cajas de la salida de calle Roger de Lauria
           </span>
           <span class="visualizer-stats" v-if="isConnected">
             Actualizando en tiempo real | {{ fpsDisplay }} fps
@@ -75,7 +82,7 @@
             <div class="offline-logo">🎥</div>
             <h3>Sensor de cámara inactivo</h3>
             <p>Conéctate al flujo de la cámara inteligente para visualizar la segmentación y el análisis del estado de las colas de manera interactiva.</p>
-            <button @click="connectWs" class="btn-connect-overlay">Iniciar Cámara</button>
+            <button @click="connectWs" class="btn-connect-overlay">Iniciar cámara</button>
           </div>
         </div>
       </div>
@@ -83,7 +90,7 @@
       <!-- Checkout Status Sidebar -->
       <div class="sidebar-container">
         <div class="sidebar-header">
-          <h2>Estado de las Cajas</h2>
+          <h2>Estado de las cajas</h2>
           <span class="refresh-indicator" :class="{ refreshing: loadingQueues }"></span>
         </div>
 
@@ -124,7 +131,7 @@
 
               <!-- Controles de Apertura (Cerrada) -->
               <div v-if="caja.status === 'cerrada'" class="control-apertura">
-                <label class="dropdown-label">Asignar Cajero:</label>
+                <label class="dropdown-label">Asignar cajero:</label>
                 <select v-model="selectedEmployeeForCaja[caja.id]" class="cashier-select">
                   <option value="" disabled>Seleccionar empleado</option>
                   <option 
@@ -140,7 +147,7 @@
                   class="btn-checkout-action open"
                   :disabled="loadingQueues"
                 >
-                  Abrir Caja
+                  Abrir caja
                 </button>
               </div>
 
@@ -151,7 +158,7 @@
                   class="btn-checkout-action close"
                   :disabled="loadingQueues"
                 >
-                  Cerrar Caja
+                  Cerrar caja
                 </button>
               </div>
             </div>
@@ -186,7 +193,7 @@ const statusLabel = computed(() => {
   switch (wsStatus.value) {
     case 'connected': return 'Activa'
     case 'connecting': return 'Conectando...'
-    case 'error': return 'Error de Red'
+    case 'error': return 'Error de red'
     default: return 'Desconectada'
   }
 })
@@ -211,6 +218,31 @@ const availableEmployees = computed(() => {
     .filter(q => q.status !== 'cerrada' && q.id_empleado)
     .map(q => Number(q.id_empleado))
   return list.filter(emp => !occupiedIds.includes(emp.id))
+})
+
+// Obtener el primer nombre del empleado de guardia
+const nextEmployeeOnDuty = computed(() => {
+  if (availableEmployees.value.length === 0) return 'Sin personal'
+  return availableEmployees.value[0].nombre.split(' ')[0]
+})
+
+const nextEmployeeOnDutyClass = computed(() => {
+  return availableEmployees.value.length > 0 ? 'bajo' : 'disconnected'
+})
+
+// Calcular nivel de congestión dinámico basado en las colas y tiempos de espera
+const congestionLevel = computed(() => {
+  if (queues.value.filter(q => q.status !== 'cerrada').length === 0) {
+    return { text: 'Fluido', class: 'bajo', icon: '🟢' }
+  }
+  const waitMin = realAverageWaitSeconds.value / 60
+  if (waitMin < 1.5) {
+    return { text: 'Fluido', class: 'bajo', icon: '🟢' }
+  } else if (waitMin < 3.0) {
+    return { text: 'Moderado', class: 'medio', icon: '🟡' }
+  } else {
+    return { text: 'Saturado', class: 'alto', icon: '🔴' }
+  }
 })
 
 // Convertir tiempo medio de espera de la API a formato minutos legible
@@ -639,6 +671,9 @@ h1 {
 .metric-value.connecting { color: #facc15; }
 .metric-value.error { color: #d71920; }
 .metric-value.disconnected { color: #627267; }
+.metric-value.bajo { color: #00843d; }
+.metric-value.medio { color: #ca8a04; }
+.metric-value.alto { color: #d71920; }
 
 /* Grid principal */
 .main-grid {

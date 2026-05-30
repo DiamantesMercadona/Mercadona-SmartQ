@@ -31,7 +31,7 @@
             </svg>
           </span>
           <span>
-            <strong>Gestion de empleados</strong>
+            <strong>Gestión de empleados</strong>
             <small>Consulta turnos, asignaciones y disponibilidad del personal.</small>
           </span>
         </RouterLink>
