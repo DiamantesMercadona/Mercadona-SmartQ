@@ -1,9 +1,0 @@
-example.env
-dist
-node_modules
-.git
-.gitignore
-Dockerfile
-README.md
-.vscode
-.claude
