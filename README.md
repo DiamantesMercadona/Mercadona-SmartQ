@@ -106,7 +106,7 @@ python main.py
 Procesa continuamente las métricas y los tiempos estimados de espera (SLA) para generar sugerencias automáticas de apertura/cierre de cajas.
 ```bash
 cd backend
-python decision_procesor.py
+python decision_processor.py
 ```
 
 ---

@@ -142,7 +142,7 @@ def main() -> None:
 
     # 5. Levantar el Motor de Decisiones (Decision Processor) en otra ventana de terminal
     print("[Orchestrator] Lanzando Motor de Decisiones (Decision Processor) en Terminal 5...")
-    subprocess.Popen('start cmd /k "cd backend && python decision_procesor.py"', shell=True)
+    subprocess.Popen('start cmd /k "cd backend && python decision_processor.py"', shell=True)
 
     print("[Orchestrator] Todos los servicios han sido lanzados en terminales individuales.")
 

@@ -22,8 +22,13 @@ except ImportError:
 
 class TestApiGetEndpoints(unittest.TestCase):
     def setUp(self):
-        self.tempdir = tempfile.TemporaryDirectory()
-        self.db_path = os.path.join(self.tempdir.name, "test_msq.db")
+        # Usar un archivo de base de datos local estático para aislar las pruebas de la base real
+        self.db_path = os.path.abspath("test_get_msq.db")
+        if os.path.exists(self.db_path):
+            try:
+                os.remove(self.db_path)
+            except Exception:
+                pass
         self.original_db_path = CONFIG["DATABASE"]["db_path"]
         CONFIG["DATABASE"]["db_path"] = self.db_path
 
@@ -50,9 +55,14 @@ class TestApiGetEndpoints(unittest.TestCase):
         self.client = TestClient(self.app)
 
     def tearDown(self):
+        # Cerrar y limpiar la base de datos local
         self.db.close()
         CONFIG["DATABASE"]["db_path"] = self.original_db_path
-        self.tempdir.cleanup()
+        if os.path.exists(self.db_path):
+            try:
+                os.remove(self.db_path)
+            except Exception:
+                pass
 
     def test_get_queues(self):
         response = self.client.get("/api/v1/queues")
