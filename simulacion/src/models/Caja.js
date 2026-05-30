@@ -3,6 +3,7 @@ import Cliente from './Cliente.js'
 import Dependiente from './Dependiente.js'
 import { simulationSpeed } from './simulacionConfig.js'
 import { patchCajaEstado } from '../services/backendApi.js'
+import { workerSetTimeout } from '../utils/workerTimer.js'
 
 class Caja {
   /**
@@ -74,7 +75,7 @@ class Caja {
   removeClienteTimeout() {
     if (this.cola.length == 0) return null
     const clienteTimeout = this.cola[0].tiempoEnCaja
-    setTimeout(
+    workerSetTimeout(
       () => {
         this.removerCliente()
         this.removeClienteTimeout()

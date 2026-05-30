@@ -1,5 +1,6 @@
 import Caja from './Caja.js'
 import { getCajas, getQueues } from '../services/backendApi.js'
+import { workerSetTimeout } from '../utils/workerTimer.js'
 import {
   simulationSpeed,
   nivelarColasAlAbrir,
@@ -34,7 +35,7 @@ class Simulacion {
       console.error('[Simulacion] Error al obtener el estado inicial:', error)
     }
     // Delay inicial para que los primeros clientes no lleguen inmediatamente al iniciar la simulación
-    setTimeout(() => this.eventoSimulacion(), 1000)
+    workerSetTimeout(() => this.eventoSimulacion(), 1000)
   }
 
   async refrescarEstadoCajas() {
@@ -155,7 +156,7 @@ class Simulacion {
       }
     }
 
-    setTimeout(
+    workerSetTimeout(
       () => {
         this.eventoSimulacion()
       },
@@ -187,7 +188,7 @@ class Simulacion {
       this._oleadaIndex = 0
     }
 
-    setTimeout(
+    workerSetTimeout(
       () => {
         this.eventoSimulacion()
       },
