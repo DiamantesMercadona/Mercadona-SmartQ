@@ -51,7 +51,7 @@
           </span>
           <span>
             <strong>Gráficas y estadísticas</strong>
-            <small>Consulta información histórica sobre tiempos de espera, tendencias, y métricas por caja y fecha.</small>
+            <small>Consulta información histórica sobre tiempos de espera, tendencias y evolución, por caja y periodo de tiempo.</small>
           </span>
         </RouterLink>
       </div>

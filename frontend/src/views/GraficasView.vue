@@ -1,13 +1,13 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1'
 
 const metrics = ref([])
 const loading = ref(false)
 const errorMessage = ref('')
-const selectedBox = ref('todas')
-const selectedLimit = ref(100)
+const selectedBox = ref('global')
+const selectedPeriod = ref('24h')
 
 const endpointCandidates = ['/metricas', '/metrics']
 
@@ -52,9 +52,27 @@ const loadMetrics = async () => {
   try {
     let lastError = null
 
+    // Calcular parámetro "desde" para el filtro de periodo
+    let desdeParam = ''
+    if (selectedPeriod.value !== 'todo') {
+      const now = new Date()
+      let ms = 0
+      if (selectedPeriod.value === '15m') ms = 15 * 60 * 1000
+      else if (selectedPeriod.value === '1h') ms = 60 * 60 * 1000
+      else if (selectedPeriod.value === '4h') ms = 4 * 60 * 60 * 1000
+      else if (selectedPeriod.value === '8h') ms = 8 * 60 * 60 * 1000
+      else if (selectedPeriod.value === '24h') ms = 24 * 60 * 60 * 1000
+      else if (selectedPeriod.value === '7d') ms = 7 * 24 * 60 * 60 * 1000
+      else if (selectedPeriod.value === '30d') ms = 30 * 24 * 60 * 60 * 1000
+      else if (selectedPeriod.value === '365d') ms = 365 * 24 * 60 * 60 * 1000
+
+      const dateFrom = new Date(now.getTime() - ms)
+      desdeParam = `&desde=${encodeURIComponent(dateFrom.toISOString())}`
+    }
+
     for (const endpoint of endpointCandidates) {
       try {
-        const data = await requestJson(`${endpoint}?limite=${selectedLimit.value}`)
+        const data = await requestJson(`${endpoint}?limite=10000${desdeParam}`)
         metrics.value = unpackMetrics(data)
           .map(normalizeMetric)
           .filter((metric) => metric.waitSeconds >= 0)
@@ -78,11 +96,10 @@ const loadMetrics = async () => {
 
 const boxOptions = computed(() => {
   const boxes = new Set(metrics.value.map((metric) => metric.boxId || 'global'))
-  return ['todas', ...Array.from(boxes).sort()]
+  return Array.from(boxes).sort()
 })
 
 const filteredMetrics = computed(() => {
-  if (selectedBox.value === 'todas') return metrics.value
   if (selectedBox.value === 'global') return metrics.value.filter((metric) => !metric.boxId)
   return metrics.value.filter((metric) => metric.boxId === selectedBox.value)
 })
@@ -110,7 +127,8 @@ const trend = computed(() => {
   const list = filteredMetrics.value
   if (list.length < 2) return 0
 
-  const previous = list.at(-2).waitSeconds
+  const stepsBack = Math.min(5, list.length - 1)
+  const previous = list[list.length - 1 - stepsBack].waitSeconds
   const latest = list.at(-1).waitSeconds
   return latest - previous
 })
@@ -142,37 +160,177 @@ const groupedByBox = computed(() => {
     .sort((a, b) => b.average - a.average)
 })
 
-const chartPoints = computed(() => {
+const plottedPoints = computed(() => {
   const list = filteredMetrics.value
-  if (!list.length) return ''
+  if (!list.length) return []
+
+  // Submuestrear/Agrupar puntos si superan un límite (80 puntos) para evitar compactación en el eje horizontal y suavizar el gráfico
+  const maxPoints = 80
+  let displayList = list
+  if (list.length > maxPoints) {
+    displayList = []
+    const bucketSize = list.length / maxPoints
+    for (let i = 0; i < maxPoints; i++) {
+      const start = Math.floor(i * bucketSize)
+      const end = Math.floor((i + 1) * bucketSize)
+      const slice = list.slice(start, end)
+      if (slice.length > 0) {
+        const avgWait = slice.reduce((sum, m) => sum + m.waitSeconds, 0) / slice.length
+        const midIndex = Math.floor((start + end) / 2)
+        displayList.push({
+          ...list[midIndex],
+          waitSeconds: avgWait,
+        })
+      }
+    }
+  }
 
   const width = 760
   const height = 250
-  const padding = 18
-  const max = Math.max(...list.map((metric) => metric.waitSeconds), 1)
-  const min = Math.min(...list.map((metric) => metric.waitSeconds), 0)
+  const paddingTop = 18
+  const paddingBottom = 34
+  const paddingLeftRight = 18
+  const max = maxWait.value || 1
+  const min = minWait.value || 0
   const range = Math.max(max - min, 1)
 
-  return list
-    .map((metric, index) => {
-      const x =
-        list.length === 1
-          ? width / 2
-          : padding + (index / (list.length - 1)) * (width - padding * 2)
-      const y = height - padding - ((metric.waitSeconds - min) / range) * (height - padding * 2)
-      return `${x.toFixed(2)},${y.toFixed(2)}`
-    })
-    .join(' ')
+  return displayList.map((metric, index) => {
+    const x =
+      displayList.length === 1
+        ? width / 2
+        : paddingLeftRight + (index / (displayList.length - 1)) * (width - paddingLeftRight * 2)
+    const y = height - paddingBottom - ((metric.waitSeconds - min) / range) * (height - paddingTop - paddingBottom)
+    return {
+      x,
+      y,
+      metric,
+      formattedWait: formatSeconds(metric.waitSeconds),
+      formattedDate: formatDate(metric.registeredAt),
+      boxLabel: formatBoxLabel(metric.boxId)
+    }
+  })
 })
 
-const chartArea = computed(() => (chartPoints.value ? `${chartPoints.value} 742,250 18,250` : ''))
+const chartPoints = computed(() => {
+  return plottedPoints.value.map(p => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' ')
+})
 
-const recentMetrics = computed(() => filteredMetrics.value.slice(-8).reverse())
+const chartArea = computed(() => (chartPoints.value ? `${chartPoints.value} 742,216 18,216` : ''))
+
+const scaleLevels = computed(() => {
+  const max = maxWait.value
+  const min = minWait.value
+  const range = max - min
+  return [
+    max,
+    min + range * 0.75,
+    min + range * 0.5,
+    min + range * 0.25,
+    min
+  ]
+})
+
+const tooltip = ref({
+  visible: false,
+  x: 0,
+  y: 0,
+  content: '',
+  subContent: '',
+  boxLabel: '',
+})
+
+const showTooltip = (event, point) => {
+  tooltip.value = {
+    visible: true,
+    x: point.x,
+    y: point.y - 12,
+    content: point.formattedWait,
+    subContent: point.formattedDate,
+    boxLabel: point.boxLabel
+  }
+}
+
+const hideTooltip = () => {
+  tooltip.value.visible = false
+}
+
+const formatBoxLabel = (label) => {
+  if (label === null || label === undefined) return 'Global'
+  const strLabel = String(label)
+  if (strLabel.toLowerCase() === 'global') return 'Global'
+  // Reemplazar Caja_1 por Caja 1
+  let clean = strLabel.replace(/_/g, ' ')
+  if (/^\d+$/.test(clean)) {
+    return `Caja ${clean}`
+  }
+  return clean.charAt(0).toUpperCase() + clean.slice(1)
+}
+
+const timeSpanMs = computed(() => {
+  const list = filteredMetrics.value
+  if (list.length < 2) return 0
+  const first = new Date(list[0].registeredAt).getTime()
+  const last = new Date(list.at(-1).registeredAt).getTime()
+  return Math.max(0, last - first)
+})
+
+const formatHorizontalLabel = (dateStr) => {
+  if (!dateStr) return ''
+  const date = new Date(dateStr)
+  if (Number.isNaN(date.getTime())) return ''
+
+  const span = timeSpanMs.value
+
+  // Si no hay rango de tiempo calculable o es cero, recurrir al periodo seleccionado
+  if (span === 0) {
+    const period = selectedPeriod.value
+    if (period === '15m' || period === '1h' || period === '4h' || period === '8h' || period === '24h') {
+      return date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
+    } else if (period === '7d' || period === '30d') {
+      return date.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })
+    } else {
+      return date.toLocaleDateString('es-ES', { month: 'short', year: 'numeric' })
+    }
+  }
+
+  const oneDay = 24 * 60 * 60 * 1000
+  const thirtyDays = 30 * oneDay
+
+  if (span <= oneDay) {
+    return date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
+  } else if (span <= thirtyDays) {
+    return date.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })
+  } else {
+    return date.toLocaleDateString('es-ES', { month: 'short', year: 'numeric' })
+  }
+}
+
+const horizontalLabels = computed(() => {
+  const points = plottedPoints.value
+  if (points.length < 2) return []
+
+  const indices = [
+    0,
+    Math.floor((points.length - 1) * 0.33),
+    Math.floor((points.length - 1) * 0.66),
+    points.length - 1
+  ]
+  const uniqueIndices = Array.from(new Set(indices))
+
+  return uniqueIndices.map(idx => {
+    const p = points[idx]
+    return {
+      x: p.x,
+      label: formatHorizontalLabel(p.metric.registeredAt)
+    }
+  })
+})
 
 const formatSeconds = (seconds) => {
-  if (!Number.isFinite(seconds)) return '0 s'
-  if (seconds < 60) return `${seconds.toFixed(1)} s`
-  return `${(seconds / 60).toFixed(1)} min`
+  const abs = Math.abs(seconds)
+  if (!Number.isFinite(abs)) return '0 s'
+  if (abs < 60) return `${abs.toFixed(1)} s`
+  return `${(abs / 60).toFixed(1)} min`
 }
 
 const formatDate = (value) => {
@@ -194,7 +352,26 @@ const barWidth = (value) => {
   return `${Math.max((value / max) * 100, 4)}%`
 }
 
-onMounted(loadMetrics)
+let refreshInterval = null
+
+onMounted(() => {
+  loadMetrics()
+  refreshInterval = setInterval(() => {
+    if (!loading.value) {
+      loadMetrics()
+    }
+  }, 10000)
+})
+
+onUnmounted(() => {
+  if (refreshInterval) {
+    clearInterval(refreshInterval)
+  }
+})
+
+watch(selectedPeriod, () => {
+  loadMetrics()
+})
 </script>
 
 <template>
@@ -210,15 +387,13 @@ onMounted(loadMetrics)
           <div>
             <h1>Gráficas y estadísticas</h1>
             <p>
-              Consulta información histórica sobre tiempos de espera, tendencias, y métricas por caja y fecha.
+              Consulta información histórica sobre tiempos de espera, tendencias y evolución, por caja y periodo de tiempo.
             </p>
           </div>
 
           <div class="summary">
-            <strong>{{ metrics.length }}</strong>
-            <span>registros</span>
-            <strong>{{ groupedByBox.length }}</strong>
-            <span>segmentos</span>
+            <span>Espera media actual</span>
+            <strong>{{ formatSeconds(latestMetric?.waitSeconds ?? 0) }}</strong>
           </div>
         </div>
 
@@ -227,55 +402,60 @@ onMounted(loadMetrics)
             Segmento
             <select v-model="selectedBox" :disabled="loading">
               <option v-for="box in boxOptions" :key="box" :value="box">
-                {{ box === 'todas' ? 'Todas las cajas' : box === 'global' ? 'Global' : box }}
+                {{ formatBoxLabel(box) }}
               </option>
             </select>
           </label>
 
           <label>
-            Límite
-            <select v-model.number="selectedLimit" :disabled="loading" @change="loadMetrics">
-              <option :value="50">50 registros</option>
-              <option :value="100">100 registros</option>
-              <option :value="250">250 registros</option>
-              <option :value="500">500 registros</option>
+            Periodo
+            <select v-model="selectedPeriod" :disabled="loading">
+              <option value="15m">Últimos 15 minutos</option>
+              <option value="1h">Última hora</option>
+              <option value="4h">Últimas 4 horas</option>
+              <option value="8h">Últimas 8 horas</option>
+              <option value="24h">Últimas 24 horas</option>
+              <option value="7d">Últimos 7 días</option>
+              <option value="30d">Último mes</option>
+              <option value="365d">Último año</option>
+              <option value="todo">Histórico completo</option>
             </select>
           </label>
 
-          <button type="button" :disabled="loading" @click="loadMetrics">
-            {{ loading ? 'Cargando...' : 'Recargar datos' }}
+          <button type="button" :class="{ 'is-loading': loading }" :disabled="loading" @click="loadMetrics">
+            <span v-if="loading" class="btn-spinner"></span>
+            {{ loading ? 'Actualizando ...' : 'Actualizar datos' }}
           </button>
         </div>
       </header>
 
       <p v-if="errorMessage" class="status-message error" role="alert">{{ errorMessage }}</p>
-      <p v-else-if="loading" class="status-message">Cargando métricas...</p>
 
       <section class="stats-grid" aria-label="Resumen de métricas">
         <article class="stat-card">
-          <span>Espera actual</span>
-          <strong>{{ formatSeconds(latestMetric?.waitSeconds ?? 0) }}</strong>
-          <small>{{ latestMetric ? formatDate(latestMetric.registeredAt) : 'Sin datos' }}</small>
-        </article>
-
-        <article class="stat-card">
-          <span>Media</span>
+          <span>Espera media</span>
           <strong>{{ formatSeconds(averageWait) }}</strong>
-          <small>{{ filteredMetrics.length }} muestras visibles</small>
+          <small>Sobre el periodo seleccionado</small>
         </article>
 
         <article class="stat-card">
-          <span>Máximo</span>
+          <span>Espera mínima</span>
+          <strong>{{ formatSeconds(minWait) }}</strong>
+          <small>Mínimo del periodo</small>
+        </article>
+
+        <article class="stat-card">
+          <span>Espera máxima</span>
           <strong>{{ formatSeconds(maxWait) }}</strong>
-          <small>Mínimo {{ formatSeconds(minWait) }}</small>
+          <small>Máximo del periodo</small>
         </article>
 
         <article class="stat-card">
           <span>Tendencia</span>
           <strong :class="{ positive: trend > 0, negative: trend < 0 }">
-            {{ trend > 0 ? '+' : '' }}{{ formatSeconds(trend) }}
+            {{ trend > 0 ? '+' : (trend < 0 ? '-' : '') }}{{ formatSeconds(trend) }}
           </strong>
-          <small>Respecto a la muestra anterior</small>
+          <small>Respecto a muestras anteriores</small>
         </article>
       </section>
 
@@ -286,19 +466,111 @@ onMounted(loadMetrics)
               <h2>Evolución temporal</h2>
               <p>Tiempo medio de espera por muestra registrada.</p>
             </div>
-            <span>{{ filteredMetrics.length }} puntos</span>
           </div>
 
           <div v-if="filteredMetrics.length" class="line-chart" role="img" aria-label="Grafica de evolucion temporal">
             <svg viewBox="0 0 760 250" preserveAspectRatio="none">
-              <line x1="18" y1="232" x2="742" y2="232" />
-              <line x1="18" y1="18" x2="18" y2="232" />
+              <!-- Líneas de referencia secundarias discontinuas para mayor precisión de lectura -->
+              <line x1="18" y1="67.5" x2="742" y2="67.5" stroke="rgba(23, 51, 38, 0.08)" stroke-dasharray="4,4" vector-effect="non-scaling-stroke" />
+              <line x1="18" y1="117" x2="742" y2="117" stroke="rgba(23, 51, 38, 0.08)" stroke-dasharray="4,4" vector-effect="non-scaling-stroke" />
+              <line x1="18" y1="166.5" x2="742" y2="166.5" stroke="rgba(23, 51, 38, 0.08)" stroke-dasharray="4,4" vector-effect="non-scaling-stroke" />
+
+              <line x1="18" y1="216" x2="742" y2="216" vector-effect="non-scaling-stroke" />
+              <line x1="18" y1="18" x2="18" y2="216" vector-effect="non-scaling-stroke" />
+              
               <polygon :points="chartArea" />
-              <polyline :points="chartPoints" />
+              <polyline :points="chartPoints" vector-effect="non-scaling-stroke" />
+
+              <!-- Títulos de ejes removidos -->
+
+              <!-- Ticks y etiquetas de marcas de tiempo del eje horizontal -->
+              <g v-for="(tick, idx) in horizontalLabels" :key="'tick-' + idx">
+                <line 
+                  :x1="tick.x" 
+                  y1="216" 
+                  :x2="tick.x" 
+                  y2="220" 
+                  stroke="rgba(23, 51, 38, 0.25)" 
+                  vector-effect="non-scaling-stroke" 
+                />
+                <text 
+                  :x="tick.x" 
+                  y="232" 
+                  text-anchor="middle" 
+                  fill="#627267" 
+                  font-size="8" 
+                  font-weight="700"
+                >
+                  {{ tick.label }}
+                </text>
+              </g>
+
+              <!-- Hitboxes invisibles para facilitar la selección o el hover táctil y de ratón -->
+              <circle 
+                v-for="(point, idx) in plottedPoints" 
+                :key="'hit-' + idx" 
+                :cx="point.x" 
+                :cy="point.y" 
+                r="10" 
+                fill="transparent" 
+                stroke="transparent" 
+                class="chart-hitbox"
+                @mouseenter="showTooltip($event, point)" 
+                @mouseleave="hideTooltip" 
+              />
+
+              <!-- Indicador circular sobre el punto activo hovered -->
+              <circle
+                v-if="tooltip.visible"
+                :cx="tooltip.x"
+                :cy="tooltip.y + 12"
+                r="5.5"
+                fill="#00843d"
+                stroke="#ffffff"
+                stroke-width="2.5"
+                pointer-events="none"
+              />
+
+              <!-- Tooltip SVG con centrado automático y escala nativa sin saltos de DOM -->
+              <g v-if="tooltip.visible" class="chart-tooltip" pointer-events="none">
+                <rect 
+                  :x="tooltip.x - 75" 
+                  :y="tooltip.y - 48" 
+                  width="150" 
+                  height="40" 
+                  rx="6" 
+                  fill="#173326" 
+                  opacity="0.96" 
+                />
+                <text 
+                  :x="tooltip.x" 
+                  :y="tooltip.y - 34" 
+                  text-anchor="middle" 
+                  fill="#ffffff" 
+                  font-size="10.5" 
+                  font-weight="800"
+                >
+                  {{ tooltip.content }} ({{ tooltip.boxLabel }})
+                </text>
+                <text 
+                  :x="tooltip.x" 
+                  :y="tooltip.y - 20" 
+                  text-anchor="middle" 
+                  fill="#a0baa8" 
+                  font-size="9" 
+                  font-weight="500"
+                >
+                  {{ tooltip.subContent }}
+                </text>
+                <polygon 
+                  :points="`${tooltip.x - 5},${tooltip.y - 8} ${tooltip.x + 5},${tooltip.y - 8} ${tooltip.x},${tooltip.y - 3}`" 
+                  fill="#173326" 
+                  opacity="0.96"
+                />
+              </g>
             </svg>
             <div class="chart-scale">
-              <span>{{ formatSeconds(maxWait) }}</span>
-              <span>{{ formatSeconds(minWait) }}</span>
+              <span v-for="(level, idx) in scaleLevels" :key="idx">{{ formatSeconds(level) }}</span>
             </div>
           </div>
 
@@ -307,47 +579,25 @@ onMounted(loadMetrics)
           </div>
         </article>
 
-        <aside class="side-panel">
-          <article class="panel-block">
-            <div class="section-heading compact">
-              <h2>Por caja</h2>
-              <span>{{ groupedByBox.length }}</span>
-            </div>
+        <article class="panel-block">
+          <div class="section-heading compact">
+            <h2>Por caja</h2>
+          </div>
 
-            <div v-if="groupedByBox.length" class="bar-list">
-              <div v-for="group in groupedByBox" :key="group.id" class="bar-row">
-                <div class="bar-label">
-                  <strong>{{ group.label }}</strong>
-                  <span>{{ formatSeconds(group.average) }}</span>
-                </div>
-                <div class="bar-track">
-                  <span :style="{ width: barWidth(group.average) }"></span>
-                </div>
+          <div v-if="groupedByBox.length" class="bar-list">
+            <div v-for="group in groupedByBox" :key="group.id" class="bar-row">
+              <div class="bar-label">
+                <strong>{{ formatBoxLabel(group.label) }}</strong>
+                <span>{{ formatSeconds(group.average) }}</span>
+              </div>
+              <div class="bar-track">
+                <span :style="{ width: barWidth(group.average) }"></span>
               </div>
             </div>
+          </div>
 
-            <div v-else class="empty-state compact">Sin datos por caja.</div>
-          </article>
-
-          <article class="panel-block">
-            <div class="section-heading compact">
-              <h2>Últimas métricas</h2>
-              <span>{{ recentMetrics.length }}</span>
-            </div>
-
-            <ol v-if="recentMetrics.length" class="recent-list">
-              <li v-for="metric in recentMetrics" :key="metric.id || `${metric.registeredAt}-${metric.boxId}`">
-                <span>
-                  <strong>{{ metric.boxId || 'Global' }}</strong>
-                  <small>{{ formatDate(metric.registeredAt) }}</small>
-                </span>
-                <b>{{ formatSeconds(metric.waitSeconds) }}</b>
-              </li>
-            </ol>
-
-            <div v-else class="empty-state compact">Sin registros recientes.</div>
-          </article>
-        </aside>
+          <div v-else class="empty-state compact">Sin datos por caja.</div>
+        </article>
       </section>
     </section>
   </main>
@@ -433,9 +683,9 @@ p {
 
 .summary {
   min-width: 168px;
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 4px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
   padding: 18px;
   border: 1px solid rgba(23, 51, 38, 0.12);
   border-radius: 8px;
@@ -450,9 +700,9 @@ p {
 }
 
 .summary span {
-  align-self: center;
   color: #627267;
-  font-size: 0.92rem;
+  font-size: 0.84rem;
+  font-weight: 800;
 }
 
 .toolbar {
@@ -503,11 +753,32 @@ button {
   font: inherit;
   font-weight: 800;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.2s ease;
 }
 
-button:disabled {
+button.is-loading {
+  background: #00662f;
   cursor: not-allowed;
-  opacity: 0.38;
+  opacity: 0.85;
+}
+
+.btn-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .status-message {
@@ -578,7 +849,6 @@ button:disabled {
   display: grid;
   grid-template-columns: minmax(0, 1.65fr) minmax(300px, 0.85fr);
   gap: 16px;
-  align-items: start;
 }
 
 .chart-card,
@@ -586,11 +856,6 @@ button:disabled {
   display: grid;
   gap: 18px;
   padding: 20px;
-}
-
-.side-panel {
-  display: grid;
-  gap: 16px;
 }
 
 .section-heading {
@@ -646,7 +911,7 @@ h2 {
   stroke: #00843d;
   stroke-linecap: round;
   stroke-linejoin: round;
-  stroke-width: 4;
+  stroke-width: 2.2;
 }
 
 .chart-scale {
@@ -661,9 +926,21 @@ h2 {
   pointer-events: none;
 }
 
-.bar-list,
+.chart-hitbox {
+  cursor: pointer;
+}
+
+.bar-list {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
 .recent-list {
   display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 12px;
   margin: 0;
   padding: 0;
@@ -702,17 +979,19 @@ h2 {
 }
 
 .recent-list li {
-  min-height: 52px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 10px 0;
-  border-bottom: 1px solid rgba(23, 51, 38, 0.1);
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(23, 51, 38, 0.08);
+  border-radius: 8px;
+  transition: background 0.2s ease;
 }
 
-.recent-list li:last-child {
-  border-bottom: 0;
+.recent-list li:hover {
+  background: rgba(255, 255, 255, 0.9);
 }
 
 .recent-list span {
@@ -724,6 +1003,7 @@ h2 {
 .recent-list b {
   color: #00843d;
   white-space: nowrap;
+  font-size: 1.05rem;
 }
 
 .empty-state {
