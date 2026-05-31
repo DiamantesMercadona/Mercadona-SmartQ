@@ -217,3 +217,24 @@ button:disabled {
   background: #020617;
   box-shadow: 0 4px 16px rgba(2, 6, 23, 0.5);
 }
+
+.btn-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+.caja-row button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 60px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}

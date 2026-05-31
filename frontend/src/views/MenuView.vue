@@ -2,10 +2,18 @@
   <main class="menu-page">
     <section class="menu-shell">
       <div class="brand-block">
-        <img class="menu-logo" src="/assets/logomercadona2.png" alt="Mercadona" />
-        <span class="kicker">SmartQ</span>
-        <h1>Panel principal</h1>
-        <p>Selecciona el area que quieres abrir para continuar con la gestion del sistema.</p>
+        <div class="brand-card">
+          <div class="logo-container">
+            <img class="menu-logo" src="/assets/logo_menu.png" alt="Mercadona" />
+          </div>
+          <div class="brand-separator"></div>
+          <div class="smartq-badge">
+            <span class="smartq-text">Smart<span class="q-highlight">Q</span></span>
+            <span class="smartq-tag">Queue Manager</span>
+          </div>
+        </div>
+        <h1>Panel de Control</h1>
+        <p>Elige el módulo con el que deseas trabajar y accede a las herramientas de gestión de la tienda.</p>
       </div>
 
       <div class="actions-list">
@@ -17,7 +25,7 @@
           </span>
           <span>
             <strong>Monitor de colas</strong>
-            <small>Visualiza el flujo de clientes y el estado de las colas.</small>
+            <small>Visualiza el flujo de clientes, el estado de las colas en tiempo real, y ejecuta acciones manuales.</small>
           </span>
         </RouterLink>
 
@@ -32,7 +40,7 @@
           </span>
           <span>
             <strong>Gestión de empleados</strong>
-            <small>Consulta turnos, asignaciones y disponibilidad del personal.</small>
+            <small>Consulta y modifica la plantilla de empleados y su asignación de turnos.</small>
           </span>
         </RouterLink>
         <RouterLink class="menu-action graficas" :to="{ name: 'graficas-view' }">
@@ -43,7 +51,7 @@
           </span>
           <span>
             <strong>Graficas y métricas</strong>
-            <small>Consulta tiempos de espera, tendencias y metricas por caja.</small>
+            <small>Consulta información histórica sobre tiempos de espera, tendencias, y metricas por caja y fecha.</small>
           </span>
         </RouterLink>
       </div>
@@ -72,37 +80,88 @@
 }
 
 .brand-block {
-  max-width: 620px;
-  display: grid;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
   gap: 16px;
+  margin-bottom: 12px;
+}
+
+.brand-card {
+  display: inline-flex;
+  align-items: center;
+  gap: 36px;
+  padding: 24px 44px;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.384);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(0, 132, 61, 0.12);
+  box-shadow: 0 12px 32px rgba(0, 132, 61, 0.05);
+  margin-bottom: 0;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.brand-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 40px rgba(0, 132, 61, 0.08);
+  border-color: rgba(0, 132, 61, 0.25);
+}
+
+.logo-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .menu-logo {
-  justify-self: center;
-  width: min(400px, 100vw);
-  max-height: 170px;
+  height: 80px;
+  width: auto;
   object-fit: contain;
 }
 
-.kicker {
-  width: fit-content;
-  display: inline-flex;
-  align-items: center;
-  min-height: 30px;
-  padding: 0 12px;
-  border: 1px solid rgba(0, 132, 61, 0.2);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.72);
-  color: #007d3a;
-  font-size: 0.82rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
+.brand-separator {
+  width: 1px;
+  height: 84px;
+  background: linear-gradient(180deg, transparent, rgba(0, 132, 61, 0.25), transparent);
+}
+
+.smartq-badge {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.smartq-text {
+  font-size: 3.2rem;
+  font-weight: 850;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  color: #173326;
+}
+
+.q-highlight {
+  background: linear-gradient(135deg, #00843d 0%, #00b050 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.smartq-tag {
+  font-size: 0.88rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: #00843d;
+  background: rgba(0, 132, 61, 0.08);
+  padding: 2px 8px;
+  border-radius: 4px;
   text-transform: uppercase;
 }
 
 h1 {
-  margin: 0;
-  font-size: clamp(2.4rem, 6vw, 4.5rem);
+  margin: 48px 0 0;
+  font-size: clamp(1.8rem, 4vw, 2.5rem);
   line-height: 1;
 }
 
@@ -111,6 +170,27 @@ p {
   color: #506459;
   font-size: 1.08rem;
   line-height: 1.6;
+}
+
+/* Stack on small screens */
+@media (max-width: 600px) {
+  .brand-card {
+    flex-direction: column;
+    gap: 16px;
+    padding: 20px 24px;
+    width: 100%;
+    max-width: 320px;
+  }
+  
+  .brand-separator {
+    width: 80%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(0, 132, 61, 0.25), transparent);
+  }
+  
+  .smartq-badge {
+    align-items: center;
+  }
 }
 
 .actions-list {
@@ -164,7 +244,7 @@ p {
 }
 
 .staff .action-icon {
-  background: #d71920;
+  background: #ffa101;
 }
 
 .graficas .action-icon {

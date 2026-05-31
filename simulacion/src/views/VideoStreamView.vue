@@ -11,11 +11,19 @@
           <span class="caja-id">Caja {{ caja.id }}</span>
           <span class="estado-dot" :class="caja.estado" :title="caja.estado"></span>
           <span class="estado-label">{{ caja.estado }}</span>
-          <button :disabled="caja.estado === 'activa'" @click="setCajaEstado(caja.id, 'activa')">
-            Abrir
+          <button 
+            :disabled="caja.estado === 'activa' || cajaAccionCargando !== null" 
+            @click="setCajaEstado(caja.id, 'activa')"
+          >
+            <span v-if="cajaAccionCargando?.id === caja.id && cajaAccionCargando?.estado === 'activa'" class="btn-spinner"></span>
+            <span v-else>Abrir</span>
           </button>
-          <button :disabled="caja.estado === 'cerrada'" @click="setCajaEstado(caja.id, 'cerrada')">
-            Cerrar
+          <button 
+            :disabled="caja.estado === 'cerrada' || cajaAccionCargando !== null" 
+            @click="setCajaEstado(caja.id, 'cerrada')"
+          >
+            <span v-if="cajaAccionCargando?.id === caja.id && cajaAccionCargando?.estado === 'cerrada'" class="btn-spinner"></span>
+            <span v-else>Cerrar</span>
           </button>
         </div>
         <p v-if="cajas.length === 0" class="empty">Sin cajas cargadas</p>
@@ -46,6 +54,7 @@ import { getCajas, patchCajaEstado } from '../services/backendApi.js'
 // -- Cajas --
 
 const cajas = ref([])
+const cajaAccionCargando = ref(null)
 
 async function cargarCajas() {
   try {
@@ -56,11 +65,14 @@ async function cargarCajas() {
 }
 
 async function setCajaEstado(id, estado) {
+  cajaAccionCargando.value = { id, estado }
   try {
     await patchCajaEstado(id, estado)
     await cargarCajas()
   } catch (e) {
     console.error(`[PATCH /cajas/${id}]`, e)
+  } finally {
+    cajaAccionCargando.value = null
   }
 }
 

@@ -338,10 +338,12 @@ onMounted(loadData)
 
         <div class="header-actions">
           <button type="button" class="secondary-button" :disabled="loading" @click="loadData">
-            {{ loading ? 'Cargando...' : 'Recargar datos' }}
+            <span v-if="loading" class="btn-spinner"></span>
+            <span v-else>Recargar datos</span>
           </button>
           <button type="button" :disabled="loading || savingSchedule" @click="saveSchedule">
-            {{ savingSchedule ? 'Guardando...' : 'Guardar turnos' }}
+            <span v-if="savingSchedule" class="btn-spinner"></span>
+            <span v-else>Guardar turnos</span>
           </button>
         </div>
       </header>
@@ -373,7 +375,8 @@ onMounted(loadData)
         </label>
 
         <button type="submit" :disabled="savingEmployee">
-          {{ savingEmployee ? 'Guardando...' : 'Añadir empleado' }}
+          <span v-if="savingEmployee" class="btn-spinner"></span>
+          <span v-else>Añadir empleado</span>
         </button>
       </form>
 
@@ -923,5 +926,27 @@ h3 {
   .shift-picker {
     grid-template-columns: 1fr;
   }
+}
+
+/* Spinner for action buttons */
+.btn-spinner {
+  display: inline-flex;
+  width: 18px;
+  height: 18px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 </style>

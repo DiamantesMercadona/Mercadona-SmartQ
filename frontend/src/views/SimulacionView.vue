@@ -69,7 +69,16 @@
         <div class="canvas-wrapper">
           <canvas ref="canvasRef" class="video-canvas"></canvas>
           
-          <div v-if="!isConnected" class="offline-overlay">
+          <!-- Animated streaming loading overlay -->
+          <div v-if="wsStatus === 'connecting' || (isConnected && !receivedFirstFrame)" class="video-loading-overlay">
+            <div class="spinner-ring">
+              <div></div><div></div><div></div><div></div>
+            </div>
+            <h3>Conectando con la cámara...</h3>
+            <p>Sincronizando señal de vídeo inteligente en tiempo real y flujo de fotogramas.</p>
+          </div>
+
+          <div v-if="wsStatus !== 'connecting' && !isConnected" class="offline-overlay">
             <div class="offline-logo">🔌</div>
             <h3>Se ha perdido la conexión</h3>
             <p>Se ha perdido la conexión con la cámara. Por favor, reintenta la conexión para restablecer el flujo de vídeo en tiempo real.</p>
@@ -139,7 +148,8 @@
                     class="btn-checkout-action open"
                     :disabled="loadingQueues"
                   >
-                    Abrir caja
+                    <span v-if="actionLoadingCajaId === caja.id" class="btn-spinner"></span>
+                    <span v-else>Abrir caja</span>
                   </button>
                 </div>
 
@@ -150,7 +160,8 @@
                     class="btn-checkout-action close"
                     :disabled="loadingQueues"
                   >
-                    Cerrar caja
+                    <span v-if="actionLoadingCajaId === caja.id" class="btn-spinner"></span>
+                    <span v-else>Cerrar caja</span>
                   </button>
                 </div>
               </div>
@@ -173,6 +184,10 @@ const realAverageWaitSeconds = ref(0.0)
 
 // Cajero seleccionado por caja para la apertura manual
 const selectedEmployeeForCaja = ref({})
+
+// Indicadores de carga adicionales
+const receivedFirstFrame = ref(false)
+const actionLoadingCajaId = ref(null)
 
 // WS de Video Procesado
 const wsStatus = ref('disconnected')
@@ -314,6 +329,7 @@ function getEmpleadoNombre(idEmpleado) {
 async function openCheckout(cajaId) {
   const employeeId = selectedEmployeeForCaja.value[cajaId] || null
   loadingQueues.value = true
+  actionLoadingCajaId.value = cajaId
   try {
     const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1'
     const res = await fetch(`${apiBase}/cajas/${cajaId}`, {
@@ -333,12 +349,14 @@ async function openCheckout(cajaId) {
     console.error(`Error al abrir caja ${cajaId}:`, e)
   } finally {
     loadingQueues.value = false
+    actionLoadingCajaId.value = null
   }
 }
 
 // Acciones del Operario: Cerrar Caja
 async function closeCheckout(cajaId) {
   loadingQueues.value = true
+  actionLoadingCajaId.value = cajaId
   try {
     const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1'
     const res = await fetch(`${apiBase}/cajas/${cajaId}`, {
@@ -357,6 +375,7 @@ async function closeCheckout(cajaId) {
     console.error(`Error al cerrar caja ${cajaId}:`, e)
   } finally {
     loadingQueues.value = false
+    actionLoadingCajaId.value = null
   }
 }
 
@@ -373,6 +392,7 @@ function connectWs() {
   }
 
   wsStatus.value = 'connecting'
+  receivedFirstFrame.value = false
   ws = new WebSocket(wsUrl)
   ws.binaryType = 'arraybuffer'
 
@@ -388,10 +408,12 @@ function connectWs() {
     if (wsStatus.value !== 'disconnected') {
       wsStatus.value = 'disconnected'
     }
+    receivedFirstFrame.value = false
   }
 
   ws.onerror = () => {
     wsStatus.value = 'error'
+    receivedFirstFrame.value = false
   }
 
   ws.onmessage = ({ data }) => {
@@ -411,6 +433,7 @@ function connectWs() {
 
     const bytes = new Uint8Array(data)
     if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+      receivedFirstFrame.value = true
       const blob = new Blob([data], { type: 'image/jpeg' })
       const url = URL.createObjectURL(blob)
       const img = new Image()
@@ -431,6 +454,7 @@ function disconnectWs() {
     ws = null
   }
   wsStatus.value = 'disconnected'
+  receivedFirstFrame.value = false
 }
 
 onMounted(async () => {
@@ -1051,6 +1075,82 @@ h1 {
 
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+
+/* Animated Camera Loading Screen Overlay */
+.video-loading-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(245, 248, 243, 0.9);
+  backdrop-filter: blur(12px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  padding: 24px;
+  z-index: 10;
+}
+
+.video-loading-overlay h3 {
+  margin: 16px 0 8px;
+  font-size: 1.25rem;
+  color: #173326;
+  font-weight: 800;
+}
+
+.video-loading-overlay p {
+  margin: 0;
+  max-width: 420px;
+  color: #506459;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+/* Spinner ring inside video overlay */
+.spinner-ring {
+  display: inline-block;
+  position: relative;
+  width: 64px;
+  height: 64px;
+}
+.spinner-ring div {
+  box-sizing: border-box;
+  display: block;
+  position: absolute;
+  width: 48px;
+  height: 48px;
+  margin: 8px;
+  border: 4px solid #00843d;
+  border-radius: 50%;
+  animation: spinner-ring-animation 1.2s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+  border-color: #00843d transparent transparent transparent;
+}
+.spinner-ring div:nth-child(1) { animation-delay: -0.45s; }
+.spinner-ring div:nth-child(2) { animation-delay: -0.3s; }
+.spinner-ring div:nth-child(3) { animation-delay: -0.15s; }
+
+/* Spinner for buttons */
+.btn-spinner {
+  display: inline-flex;
+  width: 18px;
+  height: 18px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+.btn-checkout-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+@keyframes spinner-ring-animation {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 </style>
 
