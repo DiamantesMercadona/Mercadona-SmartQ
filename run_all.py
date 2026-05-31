@@ -20,6 +20,7 @@ def setup_dependencies() -> None:
     2. Comprueba y ejecuta 'npm install' en el directorio 'simulacion' si node_modules no existe.
     3. Comprueba y ejecuta 'npm install' en el directorio 'frontend' si node_modules no existe.
     4. Copia automáticamente frontend/example.env a frontend/.env si este último no está presente.
+    5. Copia automáticamente simulacion/example.env a simulacion/.env si este último no está presente.
     """
     print("[Orchestrator] --- Verificando y preparando el entorno ---")
     
@@ -76,6 +77,18 @@ def setup_dependencies() -> None:
             print("[Orchestrator] Archivo 'frontend/.env' creado con éxito.")
         except Exception as e:
             print(f"[ERROR] Error al copiar 'frontend/example.env': {e}")
+        
+    # 5. Asegurar archivo .env de configuración en simulacion
+    sim_env = Path("simulacion/.env")
+    sim_example = Path("simulacion/example.env")
+    if not sim_env.exists() and sim_example.exists():
+        print("[Orchestrator] 'simulacion/.env' no encontrado. Copiando desde 'simulacion/example.env'...")
+        try:
+            # Realiza un fallback copiando el archivo de ejemplo para asegurar las variables de entorno de la simulación
+            shutil.copy(str(sim_example), str(sim_env))
+            print("[Orchestrator] Archivo 'simulacion/.env' creado con éxito.")
+        except Exception as e:
+            print(f"[ERROR] Error al copiar 'simulacion/example.env': {e}")
         
     print("[Orchestrator] --- Entorno listo ---\n")
 
