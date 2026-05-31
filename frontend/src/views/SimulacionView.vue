@@ -19,12 +19,12 @@
         <div class="metric-icon">
           <!-- Simplified Speedometer Dial SVG Icon representing congestion level -->
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.2" stroke="currentColor" :class="['metric-svg-icon', congestionLevel.class]" style="width: 24px; height: 24px;">
-            <!-- Speedometer dial (arc) -->
-            <path stroke-linecap="round" stroke-linejoin="round" d="M3 12a9 9 0 1 1 18 0" />
+            <!-- Speedometer dial (arc) and base line -->
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5a9 9 0 1 1 18 0M3 16.5h18" />
             <!-- Speedometer needle -->
-            <path stroke-linecap="round" stroke-linejoin="round" d="M12 12L16 8" />
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 16.5L16 11.5" />
             <!-- Center anchor circle -->
-            <circle cx="12" cy="12" r="1.5" fill="currentColor" />
+            <circle cx="12" cy="16.5" r="1.5" fill="currentColor" />
           </svg>
         </div>
         <div class="metric-details">
