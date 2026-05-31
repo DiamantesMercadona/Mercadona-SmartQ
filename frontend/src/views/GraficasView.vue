@@ -202,7 +202,7 @@ onMounted(loadMetrics)
     <section class="page-shell">
       <header class="hero">
         <RouterLink class="back-link" :to="{ name: 'menu' }">
-          <span class="back-arrow">←</span> Volver al menú
+          <span class="back-arrow">←</span> Volver al menú principal
         </RouterLink>
         <span class="kicker">SmartQ</span>
 

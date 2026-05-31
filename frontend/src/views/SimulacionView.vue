@@ -3,22 +3,13 @@
     <header class="dashboard-header">
       <div class="header-left">
         <RouterLink class="back-link" :to="{ name: 'menu' }">
-          <span class="back-arrow">←</span> Volver al menú
+          <span class="back-arrow">←</span> Volver al menú principal
         </RouterLink>
         <div class="title-container">
           <span class="kicker">SmartQ</span>
           <h1>Monitor de colas</h1>
         </div>
         <p class="subtitle">Monitorización en tiempo real del flujo de clientes y análisis de colas de las cajas</p>
-      </div>
-      <div class="header-right">
-        <button 
-          @click="toggleConnection" 
-          :class="['btn-connection', wsStatus]"
-        >
-          <span class="status-indicator-dot"></span>
-          {{ isConnected ? 'Desconectar cámara' : 'Conectar cámara' }}
-        </button>
       </div>
     </header>
 
@@ -79,87 +70,89 @@
           <canvas ref="canvasRef" class="video-canvas"></canvas>
           
           <div v-if="!isConnected" class="offline-overlay">
-            <div class="offline-logo">🎥</div>
-            <h3>Sensor de cámara inactivo</h3>
-            <p>Conéctate al flujo de la cámara inteligente para visualizar la segmentación y el análisis del estado de las colas de manera interactiva.</p>
-            <button @click="connectWs" class="btn-connect-overlay">Iniciar cámara</button>
+            <div class="offline-logo">🔌</div>
+            <h3>Se ha perdido la conexión</h3>
+            <p>Se ha perdido la conexión con la cámara. Por favor, reintenta la conexión para restablecer el flujo de vídeo en tiempo real.</p>
+            <button @click="connectWs" class="btn-connect-overlay">Reconectar con la cámara</button>
           </div>
         </div>
       </div>
 
       <!-- Checkout Status Sidebar -->
-      <div class="sidebar-container">
-        <div class="sidebar-header">
-          <h2>Estado de las cajas</h2>
-          <span class="refresh-indicator" :class="{ refreshing: loadingQueues }"></span>
-        </div>
+      <div class="sidebar-wrapper">
+        <div class="sidebar-container">
+          <div class="sidebar-header">
+            <h2>Estado de las cajas</h2>
+            <span class="refresh-indicator" :class="{ refreshing: loadingQueues }"></span>
+          </div>
 
-        <div class="checkout-list">
-          <div 
-            v-for="caja in sortedQueues" 
-            :key="caja.id" 
-            :class="['checkout-card', caja.status === 'cerrada' ? 'cerrada' : 'activa']"
-          >
-            <div class="checkout-top">
-              <span class="checkout-name">Caja {{ caja.id }}</span>
-              <span :class="['status-badge', caja.status === 'cerrada' ? 'cerrada' : 'activa']">
-                {{ caja.status !== 'cerrada' ? 'Abierta' : 'Cerrada' }}
-              </span>
-            </div>
-            
-            <div class="checkout-body">
-              <div v-if="caja.status !== 'cerrada'" class="cashier-info">
-                <span class="info-label">Cajero:</span>
-                <span class="info-value">{{ getEmpleadoNombre(caja.id_empleado) }}</span>
+          <div class="checkout-list">
+            <div 
+              v-for="caja in sortedQueues" 
+              :key="caja.id" 
+              :class="['checkout-card', caja.status === 'cerrada' ? 'cerrada' : 'activa']"
+            >
+              <div class="checkout-top">
+                <span class="checkout-name">Caja {{ caja.id }}</span>
+                <span :class="['status-badge', caja.status === 'cerrada' ? 'cerrada' : 'activa']">
+                  {{ caja.status !== 'cerrada' ? 'Abierta' : 'Cerrada' }}
+                </span>
               </div>
               
-              <div v-if="caja.status !== 'cerrada'" class="queue-status-bar">
-                <div class="queue-label-row">
-                  <span class="info-label">Clientes en cola:</span>
-                  <span class="queue-count" :class="{ congested: caja.length >= 5 }">
-                    {{ caja.length }}
-                  </span>
+              <div class="checkout-body">
+                <div v-if="caja.status !== 'cerrada'" class="cashier-info">
+                  <span class="info-label">Cajero:</span>
+                  <span class="info-value">{{ getEmpleadoNombre(caja.id_empleado) }}</span>
                 </div>
-                <div class="progress-track">
-                  <div 
-                    class="progress-fill" 
-                    :style="{ width: `${Math.min(100, (caja.length / 6) * 100)}%` }"
-                    :class="{ high: caja.length >= 5, medium: caja.length >= 3 && caja.length < 5 }"
-                  ></div>
+                
+                <div v-if="caja.status !== 'cerrada'" class="queue-status-bar">
+                  <div class="queue-label-row">
+                    <span class="info-label">Clientes en cola:</span>
+                    <span class="queue-count" :class="{ congested: caja.length >= 5 }">
+                      {{ caja.length }}
+                    </span>
+                  </div>
+                  <div class="progress-track">
+                    <div 
+                      class="progress-fill" 
+                      :style="{ width: `${Math.min(100, (caja.length / 6) * 100)}%` }"
+                      :class="{ high: caja.length >= 5, medium: caja.length >= 3 && caja.length < 5 }"
+                    ></div>
+                  </div>
                 </div>
-              </div>
 
-              <!-- Controles de Apertura (Cerrada) -->
-              <div v-if="caja.status === 'cerrada'" class="control-apertura">
-                <label class="dropdown-label">Asignar cajero:</label>
-                <select v-model="selectedEmployeeForCaja[caja.id]" class="cashier-select">
-                  <option value="" disabled>Seleccionar empleado</option>
-                  <option 
-                    v-for="emp in availableEmployees" 
-                    :key="emp.id" 
-                    :value="emp.id"
+                <!-- Controles de Apertura (Cerrada) -->
+                <div v-if="caja.status === 'cerrada'" class="control-apertura">
+                  <label class="dropdown-label">Asignar cajero:</label>
+                  <select v-model="selectedEmployeeForCaja[caja.id]" class="cashier-select">
+                    <option value="" disabled>Seleccionar empleado</option>
+                    <option 
+                      v-for="emp in availableEmployees" 
+                      :key="emp.id" 
+                      :value="emp.id"
+                    >
+                      {{ emp.nombre }}
+                    </option>
+                  </select>
+                  <button 
+                    @click="openCheckout(caja.id)" 
+                    class="btn-checkout-action open"
+                    :disabled="loadingQueues"
                   >
-                    {{ emp.nombre }}
-                  </option>
-                </select>
-                <button 
-                  @click="openCheckout(caja.id)" 
-                  class="btn-checkout-action open"
-                  :disabled="loadingQueues"
-                >
-                  Abrir caja
-                </button>
-              </div>
+                    Abrir caja
+                  </button>
+                </div>
 
-              <!-- Controles de Cierre (Activa) -->
-              <div v-if="caja.status !== 'cerrada'" class="control-cierre">
-                <button 
-                  @click="closeCheckout(caja.id)" 
-                  class="btn-checkout-action close"
-                  :disabled="loadingQueues"
-                >
-                  Cerrar caja
-                </button>
+                <!-- Controles de Cierre (Activa) -->
+                <div v-if="caja.status !== 'cerrada'" class="control-cierre">
+                  <button 
+                    @click="closeCheckout(caja.id)" 
+                    class="btn-checkout-action close"
+                    :disabled="loadingQueues"
+                  >
+                    Cerrar caja
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -188,15 +181,6 @@ const fpsDisplay = ref('0.0')
 const canvasRef = ref(null)
 
 const isConnected = computed(() => wsStatus.value === 'connected')
-
-const statusLabel = computed(() => {
-  switch (wsStatus.value) {
-    case 'connected': return 'Activa'
-    case 'connecting': return 'Conectando...'
-    case 'error': return 'Error de red'
-    default: return 'Desconectada'
-  }
-})
 
 // Métricas agregadas
 const sortedQueues = computed(() => {
@@ -449,14 +433,6 @@ function disconnectWs() {
   wsStatus.value = 'disconnected'
 }
 
-function toggleConnection() {
-  if (isConnected.value) {
-    disconnectWs()
-  } else {
-    connectWs()
-  }
-}
-
 onMounted(async () => {
   await fetchEmpleados()
   await fetchQueues()
@@ -562,8 +538,8 @@ h1 {
   font-size: 1rem;
 }
 
-/* Botón Conexión */
-.btn-connection {
+/* Badge Estado Conexión */
+.status-badge-header {
   display: inline-flex;
   align-items: center;
   gap: 10px;
@@ -574,8 +550,6 @@ h1 {
   color: #173326;
   font-size: 0.9rem;
   font-weight: 800;
-  cursor: pointer;
-  transition: all 0.2s ease;
   box-shadow: 0 4px 12px rgba(23, 51, 38, 0.05);
 }
 
@@ -587,38 +561,31 @@ h1 {
   transition: background 0.25s ease;
 }
 
-.btn-connection.connected {
+.status-badge-header.connected {
   border-color: rgba(0, 132, 61, 0.3);
   background: rgba(0, 132, 61, 0.06);
 }
-.btn-connection.connected .status-indicator-dot {
+.status-badge-header.connected .status-indicator-dot {
   background: #00843d;
   box-shadow: 0 0 8px #00843d;
   animation: pulse-active 1.5s infinite;
 }
 
-.btn-connection.connecting {
+.status-badge-header.connecting {
   border-color: rgba(250, 204, 21, 0.3);
   background: rgba(250, 204, 21, 0.06);
 }
-.btn-connection.connecting .status-indicator-dot {
+.status-badge-header.connecting .status-indicator-dot {
   background: #facc15;
   animation: pulse-active 1s infinite;
 }
 
-.btn-connection.error {
+.status-badge-header.error {
   border-color: rgba(215, 25, 32, 0.3);
   background: rgba(215, 25, 32, 0.06);
 }
-.btn-connection.error .status-indicator-dot {
+.status-badge-header.error .status-indicator-dot {
   background: #d71920;
-}
-
-.btn-connection:hover {
-  transform: translateY(-2px);
-  background: #ffffff;
-  border-color: rgba(0, 132, 61, 0.35);
-  box-shadow: 0 6px 16px rgba(23, 51, 38, 0.08);
 }
 
 /* Metrics Row */
@@ -686,6 +653,9 @@ h1 {
 @media (max-width: 1024px) {
   .main-grid {
     grid-template-columns: 1fr;
+  }
+  .sidebar-wrapper {
+    height: 500px;
   }
 }
 
@@ -802,6 +772,12 @@ h1 {
 }
 
 /* Sidebar de Cajas */
+.sidebar-wrapper {
+  position: relative;
+  height: 100%;
+  width: 100%;
+}
+
 .sidebar-container {
   background: rgba(255, 255, 255, 0.85);
   border: 1px solid rgba(23, 51, 38, 0.12);
@@ -811,7 +787,8 @@ h1 {
   flex-direction: column;
   gap: 14px;
   box-shadow: 0 12px 32px rgba(23, 51, 38, 0.06);
-  height: 100%;
+  position: absolute;
+  inset: 0;
   box-sizing: border-box;
 }
 
