@@ -17,9 +17,14 @@
     <section class="metrics-row">
       <div class="metric-card">
         <div class="metric-icon">
-          <!-- Speedometer SVG Icon representing congestion level -->
+          <!-- Simplified Speedometer Dial SVG Icon representing congestion level -->
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.2" stroke="currentColor" :class="['metric-svg-icon', congestionLevel.class]" style="width: 24px; height: 24px;">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M15.22 14.78a5 5 0 00-6.44 0M9 21h6m-3-9v4m-3.52 1.48L6 14m12 0l-2.48 3.48M12 3a9 9 0 00-9 9m9-9a9 9 0 019 9" />
+            <!-- Speedometer dial (arc) -->
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3 12a9 9 0 1 1 18 0" />
+            <!-- Speedometer needle -->
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 12L16 8" />
+            <!-- Center anchor circle -->
+            <circle cx="12" cy="12" r="1.5" fill="currentColor" />
           </svg>
         </div>
         <div class="metric-details">
@@ -41,9 +46,10 @@
       </div>
       <div class="metric-card">
         <div class="metric-icon">
-          <!-- People SVG Icon -->
+          <!-- Simplified People/Users Group SVG Icon -->
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.2" stroke="currentColor" style="width: 24px; height: 24px; color: #00843d;">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.109A11.386 11.386 0 0110.089 21m-4.212-1.484A9.38 9.38 0 013 19.128v-.109A11.383 11.383 0 018.828 21m1.08-1.872a4.123 4.123 0 00-.08-.474m0 0V15m0 0a4.125 4.125 0 00-7.533 2.493M9 11.25a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
+            <!-- Foreground profile silhouette -->
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
           </svg>
         </div>
         <div class="metric-details">
