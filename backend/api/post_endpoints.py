@@ -70,6 +70,11 @@ class TurnoUpdate(BaseModel):
     orden: list[dict[str, Any]] = Field(default_factory=list)
 
 
+class TurnosBulkUpdate(BaseModel):
+    turnos: list[TurnoUpdate]
+
+
+
 class PulseraEvent(BaseModel):
     pulsera_id: str
     evento: str
@@ -241,6 +246,20 @@ async def actualizar_turnos(turnos: list[TurnoUpdate]):
         raise HTTPException(status_code=400, detail=f"Falta el campo requerido: {exc}")
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.put("/turnos")
+async def actualizar_turnos_put(payload: TurnosBulkUpdate):
+    try:
+        with DatabaseMSQ() as db:
+            db.actualizar_turnos([turno.model_dump() for turno in payload.turnos])
+            actualizados = db.obtener_turnos()
+        return {"message": "Turnos actualizados correctamente", "turnos": actualizados}
+    except KeyError as exc:
+        raise HTTPException(status_code=400, detail=f"Falta el campo requerido: {exc}")
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
 
 
 @router.post("/pulsera/evento")

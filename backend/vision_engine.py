@@ -418,6 +418,7 @@ class VisionEngine:
         self.confidence_threshold = vision_cfg.get("yolo_confidence", 0.3)
         self.iou_threshold = vision_cfg.get("yolo_iou", 0.45)
         self.imgsz = vision_cfg.get("yolo_imgsz", 480)
+        self.draw_rois = vision_cfg.get("draw_rois", True)
 
         # Configuración del factor de omisión de frames (frame skipping) para optimizar rendimiento
         self.frame_skip = vision_cfg.get("yolo_frame_skip", 2)
@@ -853,8 +854,9 @@ class VisionEngine:
 
             self.frame_count += 1
 
-            # Dibujar primero los polígonos de las ROIs de fondo
-            self._draw_rois(frame)
+            # Dibujar primero los polígonos de las ROIs de fondo si está habilitado en configuración
+            if self.draw_rois:
+                self._draw_rois(frame)
 
             # Ejecutar modelo de detección únicamente en los frames indicados por frame_skip
             if self.frame_count % self.frame_skip == 0:

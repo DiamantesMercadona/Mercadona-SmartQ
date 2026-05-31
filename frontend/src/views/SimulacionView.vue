@@ -678,8 +678,41 @@ h1 {
   .main-grid {
     grid-template-columns: 1fr;
   }
+  
   .sidebar-wrapper {
-    height: 500px;
+    height: auto;
+  }
+  
+  .sidebar-container {
+    position: relative;
+    inset: auto;
+    height: auto;
+    padding: 18px;
+  }
+  
+  .checkout-list {
+    overflow-y: visible;
+  }
+}
+
+@media (max-width: 768px) {
+  .simulacion-dashboard {
+    padding: 16px;
+    gap: 16px;
+  }
+  
+  .metrics-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  
+  .sidebar-container {
+    padding: 14px;
+  }
+}
+
+@media (max-width: 480px) {
+  .metrics-row {
+    grid-template-columns: 1fr;
   }
 }
 

@@ -70,5 +70,6 @@ app.include_router(video_router, prefix="/api/v1", tags=["Video Redis Ingest"])
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="localhost", port=8000)
+    uvicorn.run("api.main:app", host="localhost", port=8000, reload=True)
+
     

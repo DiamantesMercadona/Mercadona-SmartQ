@@ -31,6 +31,7 @@ CONFIG = {
         "ws_url": "ws://localhost:8000/api/v1/ws/video/events",  # Endpoint WS de salida del backend
         "ws_frame_width": 1904,              # Ancho del frame
         "ws_frame_height": 935,              # Alto del frame
+        "draw_rois": True,                   # Si se deben dibujar las ROIs en el flujo de vídeo
     },
  
     # ------------------------------------------------------------------

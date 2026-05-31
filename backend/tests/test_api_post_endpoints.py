@@ -134,6 +134,26 @@ class TestApiPostEndpoints(unittest.TestCase):
         turno = self.db.obtener_turnos(dia_semana="lunes", turno="mañana")[0]
         self.assertEqual(turno["orden"], [{"id": emp_id}])
 
+    def test_bulk_upsert_turnos_put(self):
+        """Verifica el registro masivo (lote) de la asignación semanal de turnos vía PUT."""
+        emp_id = self.db.crear_empleado("Elena", "Gómez", "p-999")
+        response = self.client.put(
+            "/api/v1/turnos",
+            json={
+                "turnos": [
+                    {
+                        "dia_semana": "martes",
+                        "turno": "tarde",
+                        "orden": [{"id": emp_id}]
+                    }
+                ]
+            }
+        )
+        self.assertEqual(response.status_code, 200)
+        turno = self.db.obtener_turnos(dia_semana="martes", turno="tarde")[0]
+        self.assertEqual(turno["orden"], [{"id": emp_id}])
+
+
     def test_delete_caja(self):
         """Verifica la eliminación correcta de una caja y el error 404 al intentar borrar una inexistente."""
         # 1. Crear caja para borrar

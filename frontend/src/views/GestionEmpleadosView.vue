@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1'
 
@@ -308,6 +308,21 @@ const moveEmployee = (day, shift, index, direction) => {
   list.splice(newIndex, 0, employeeId)
 }
 
+const removeEmployeeFromShift = (day, shift, index) => {
+  day[shift].splice(index, 1)
+}
+
+let toastTimeout = null
+watch([errorMessage, successMessage], ([newErr, newSucc]) => {
+  if (newErr || newSucc) {
+    if (toastTimeout) clearTimeout(toastTimeout)
+    toastTimeout = setTimeout(() => {
+      errorMessage.value = ''
+      successMessage.value = ''
+    }, 4000)
+  }
+})
+
 onMounted(loadData)
 </script>
 
@@ -329,25 +344,15 @@ onMounted(loadData)
 
           <div class="summary">
             <strong>{{ employees.length }}</strong>
-            <span>empleados</span>
+            <span>empleados registrados</span>
             <strong>{{ totalAssignments }}</strong>
-            <span>asignaciones</span>
+            <span>turnos asignados</span>
           </div>
-        </div>
-
-        <div class="header-actions">
-          <button type="button" class="secondary-button" :disabled="loading" @click="loadData">
-            <span v-if="loading" class="btn-spinner"></span>
-            <span v-else>Recargar datos</span>
-          </button>
-          <button type="button" :disabled="loading || savingSchedule" @click="saveSchedule">
-            <span v-if="savingSchedule" class="btn-spinner"></span>
-            <span v-else>Guardar turnos</span>
-          </button>
         </div>
       </header>
 
       <form class="employee-form" @submit.prevent="addEmployee">
+        <h2 class="form-title">Añadir empleados</h2>
         <label>
           Nombre
           <input v-model="newEmployee.name" type="text" placeholder="Ej. Ana" :disabled="savingEmployee" />
@@ -364,7 +369,7 @@ onMounted(loadData)
         </label>
 
         <label>
-          ID pulsera
+          ID de pulsera
           <input
             v-model="newEmployee.braceletId"
             type="text"
@@ -375,13 +380,15 @@ onMounted(loadData)
 
         <button type="submit" :disabled="savingEmployee">
           <span v-if="savingEmployee" class="btn-spinner"></span>
-          <span v-else>Añadir empleado</span>
+          <span v-else>Añadir</span>
         </button>
       </form>
 
-      <p v-if="errorMessage" class="status-message error" role="alert">{{ errorMessage }}</p>
-      <p v-else-if="successMessage" class="status-message success">{{ successMessage }}</p>
-      <p v-else-if="loading" class="status-message">Cargando empleados y turnos...</p>
+      <p v-if="loading" class="status-message">Cargando empleados y turnos...</p>
+
+      <div class="schedule-section-header">
+        <h2 class="schedule-section-title">Planificación semanal</h2>
+      </div>
 
       <section class="schedule-grid" aria-label="Turnos semanales">
         <article v-for="day in weekSchedule" :key="day.day" class="day-card">
@@ -449,7 +456,9 @@ onMounted(loadData)
                     :disabled="index === 0"
                     @click="moveEmployee(day, 'morning', index, -1)"
                   >
-                    ^
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="18 15 12 9 6 15"></polyline>
+                    </svg>
                   </button>
                   <button
                     type="button"
@@ -457,7 +466,20 @@ onMounted(loadData)
                     :disabled="index === day.morning.length - 1"
                     @click="moveEmployee(day, 'morning', index, 1)"
                   >
-                    v
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    class="btn-remove-assignment"
+                    aria-label="Quitar de turno"
+                    @click="removeEmployeeFromShift(day, 'morning', index)"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                      <line x1="18" y1="6" x2="6" y2="18"></line>
+                      <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
                   </button>
                 </div>
               </li>
@@ -526,7 +548,9 @@ onMounted(loadData)
                     :disabled="index === 0"
                     @click="moveEmployee(day, 'afternoon', index, -1)"
                   >
-                    ^
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="18 15 12 9 6 15"></polyline>
+                    </svg>
                   </button>
                   <button
                     type="button"
@@ -534,7 +558,20 @@ onMounted(loadData)
                     :disabled="index === day.afternoon.length - 1"
                     @click="moveEmployee(day, 'afternoon', index, 1)"
                   >
-                    v
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    class="btn-remove-assignment"
+                    aria-label="Quitar de turno"
+                    @click="removeEmployeeFromShift(day, 'afternoon', index)"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                      <line x1="18" y1="6" x2="6" y2="18"></line>
+                      <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
                   </button>
                 </div>
               </li>
@@ -542,7 +579,41 @@ onMounted(loadData)
           </div>
         </article>
       </section>
+
+      <div class="save-actions">
+        <button type="button" class="btn-save-schedule" :disabled="loading || savingSchedule" @click="saveSchedule">
+          <span v-if="savingSchedule" class="btn-spinner"></span>
+          <span v-else>Guardar turnos</span>
+        </button>
+      </div>
     </section>
+
+    <!-- Toast Popup Notifications -->
+    <Transition name="toast-fade">
+      <div v-if="errorMessage || successMessage" :class="['toast-popup', errorMessage ? 'error' : 'success']">
+        <div class="toast-content">
+          <span class="toast-icon" v-if="successMessage">
+            <svg class="toast-icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+          </span>
+          <span class="toast-icon" v-else>
+            <svg class="toast-icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+              <line x1="12" y1="9" x2="12" y2="13"></line>
+              <line x1="12" y1="17" x2="12.01" y2="17"></line>
+            </svg>
+          </span>
+          <span class="toast-message">{{ errorMessage || successMessage }}</span>
+        </div>
+        <div class="toast-timer">
+          <svg class="timer-svg" width="20" height="20" viewBox="0 0 24 24">
+            <circle class="timer-bg" cx="12" cy="12" r="10" stroke="rgba(255, 255, 255, 0.25)" stroke-width="3" fill="none" />
+            <circle class="timer-progress" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" fill="none" />
+          </svg>
+        </div>
+      </div>
+    </Transition>
   </main>
 </template>
 
@@ -666,6 +737,14 @@ p {
   box-shadow: 0 18px 44px rgba(23, 51, 38, 0.1);
 }
 
+.form-title {
+  grid-column: 1 / -1;
+  margin: 0 0 4px 0;
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #173326;
+}
+
 label {
   display: grid;
   gap: 8px;
@@ -744,6 +823,21 @@ button:disabled {
   color: #007d3a;
 }
 
+.schedule-section-header {
+  margin-top: 24px;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid rgba(23, 51, 38, 0.08);
+}
+
+h2.schedule-section-title {
+  margin: 0;
+  font-size: clamp(1.8rem, 4.5vw, 2.6rem);
+  line-height: 1.1;
+  color: #173326;
+  font-weight: 800;
+}
+
 .schedule-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -758,6 +852,7 @@ button:disabled {
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.82);
   box-shadow: 0 18px 42px rgba(23, 51, 38, 0.1);
+  align-content: start;
 }
 
 h2 {
@@ -768,6 +863,7 @@ h2 {
 .shift-block {
   display: grid;
   gap: 10px;
+  align-content: start;
 }
 
 .shift-heading {
@@ -785,7 +881,7 @@ h3 {
 }
 
 .afternoon h3 {
-  color: #d71920;
+  color: #ffa101;
 }
 
 .shift-heading span {
@@ -897,6 +993,15 @@ h3 {
   background: #173326;
 }
 
+.order-actions button.btn-remove-assignment {
+  background: #506459;
+}
+
+.order-actions button.btn-remove-assignment:hover {
+  background: #d71920;
+  color: #ffffff;
+}
+
 @media (max-width: 980px) {
   .hero-content,
   .employee-form,
@@ -947,5 +1052,114 @@ button {
 
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+
+.save-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+.btn-save-schedule {
+  min-height: 48px;
+  padding: 0 32px;
+  font-size: 1.05rem;
+  box-shadow: 0 8px 24px rgba(0, 132, 61, 0.15);
+  transition: all 0.2s ease;
+}
+
+.btn-save-schedule:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 32px rgba(0, 132, 61, 0.22);
+  background: #00662f;
+}
+
+/* Toast Transition */
+.toast-fade-enter-active,
+.toast-fade-leave-active {
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.toast-fade-enter-from {
+  opacity: 0;
+  transform: translateY(-20px) scale(0.95);
+}
+
+.toast-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-10px) scale(0.98);
+}
+
+/* Toast Popups */
+.toast-popup {
+  position: fixed;
+  top: 32px;
+  right: 32px;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-width: 280px;
+  max-width: 420px;
+  padding: 14px 20px;
+  border-radius: 10px;
+  box-shadow: 0 20px 48px rgba(23, 51, 38, 0.16);
+  color: #ffffff;
+}
+
+.toast-popup.success {
+  background: #00843d;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.toast-popup.error {
+  background: #d71920;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.toast-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.toast-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.toast-message {
+  font-size: 0.95rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.toast-timer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.timer-svg {
+  transform: rotate(-90deg);
+}
+
+.timer-progress {
+  stroke-dasharray: 62.8;
+  stroke-dashoffset: 0;
+  animation: toast-countdown 4s linear forwards;
+}
+
+@keyframes toast-countdown {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: 62.8;
+  }
 }
 </style>
