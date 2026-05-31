@@ -75,7 +75,7 @@
               <div></div><div></div><div></div><div></div>
             </div>
             <h3>Conectando con la cámara...</h3>
-            <p>Sincronizando señal de vídeo inteligente en tiempo real y flujo de fotogramas.</p>
+            <p>Sincronizando señal de vídeo en tiempo real y flujo de fotogramas.</p>
           </div>
 
           <div v-if="wsStatus !== 'connecting' && !isConnected" class="offline-overlay">
@@ -676,22 +676,39 @@ h1 {
 
 @media (max-width: 1024px) {
   .main-grid {
-    grid-template-columns: 1fr;
+    display: flex !important;
+    flex-direction: column !important;
+    grid-template-columns: 1fr !important;
+    height: auto !important;
+    gap: 20px !important;
   }
   
   .sidebar-wrapper {
-    height: auto;
+    height: auto !important;
+    position: relative !important;
   }
   
   .sidebar-container {
-    position: relative;
-    inset: auto;
-    height: auto;
-    padding: 18px;
+    position: relative !important;
+    top: auto !important;
+    bottom: auto !important;
+    left: auto !important;
+    right: auto !important;
+    height: auto !important;
+    min-height: auto !important;
+    padding: 18px !important;
+    display: block !important;
+    box-sizing: border-box !important;
   }
   
   .checkout-list {
-    overflow-y: visible;
+    display: flex !important;
+    flex-direction: column !important;
+    flex: none !important;
+    height: auto !important;
+    min-height: auto !important;
+    overflow-y: visible !important;
+    margin-top: 14px !important;
   }
 }
 

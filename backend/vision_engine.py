@@ -916,7 +916,8 @@ class VisionEngine:
                 self.last_db_save_time = current_time
 
             # Dibujar elementos gráficos y ajustar el frame para visualización segura
-            self._draw_interface(frame)
+            if self.draw_rois:
+                self._draw_interface(frame)
 
             # Transmitir el frame procesado y anotado si estamos en modo WS
             if self._ws_mode and hasattr(self, "_ws_sender") and self._ws_sender:

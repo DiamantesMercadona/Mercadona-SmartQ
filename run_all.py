@@ -141,11 +141,11 @@ def main() -> None:
     simulation_url = "http://localhost:5174"
     
     # Abre el panel de control y la simulación 3D interactiva en pestañas del navegador web predeterminado
-    print(f"[Orchestrator] Abriendo Frontend Dashboard en el navegador: {dashboard_url}")
-    webbrowser.open(dashboard_url)
-    time.sleep(0.5)
     print(f"[Orchestrator] Abriendo Simulación 3D en el navegador: {simulation_url}")
     webbrowser.open(simulation_url)
+    time.sleep(1.0)
+    print(f"[Orchestrator] Abriendo Frontend Dashboard en el navegador: {dashboard_url}")
+    webbrowser.open(dashboard_url)
     
     time.sleep(1.0)
 
