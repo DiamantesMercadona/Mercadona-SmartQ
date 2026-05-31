@@ -975,7 +975,7 @@ h2 {
   height: 100%;
   display: block;
   border-radius: inherit;
-  background: linear-gradient(90deg, #00843d, #d71920);
+  background: linear-gradient(90deg, #00843d, #ffa101);
 }
 
 .recent-list li {
