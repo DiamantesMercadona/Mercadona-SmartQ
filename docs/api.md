@@ -227,32 +227,7 @@ Actualiza los empleados asignados a turnos concretos de la semana en formato de 
 
 ---
 
-### 5. Control de Accesos y Autenticación
 
-Endpoints privados de control de seguridad para restringir el acceso al panel administrativo de gerencia.
-
-**`POST /api/v1/auth/login`**:
-Valida las credenciales cifrando de forma interna la contraseña mediante un algoritmo hash seguro (SHA-256) antes de compararlas con la persistencia.
-* **Cuerpo de la Solicitud (JSON)**:
-```json
-{
-  "usuario": "admin",
-  "contrasena": "1234"
-}
-```
-* **Respuesta (200 OK)**:
-```json
-{
-  "message": "Autenticacion correcta",
-  "usuario": {
-    "id": 1,
-    "usuario": "admin",
-    "activo": true
-  }
-}
-```
-
----
 
 ### 6. Video Ingestion & WebSockets de Tiempo Real
 

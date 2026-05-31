@@ -52,8 +52,7 @@ class TestApiPostEndpoints(unittest.TestCase):
         self.app.include_router(post_router, prefix="/api/v1")
         self.client = TestClient(self.app)
 
-        # Crear credenciales de prueba predeterminadas en base de datos
-        self.db.crear_usuario(usuario="test_admin", contraseña="test_pass")
+
 
     def tearDown(self):
         # Cerrar y limpiar la base de datos local
@@ -65,24 +64,7 @@ class TestApiPostEndpoints(unittest.TestCase):
             except Exception:
                 pass
 
-    def test_admin_authentication_login(self):
-        """Verifica que el endpoint de autenticación permita el acceso solo con credenciales válidas."""
-        # 1. Login exitoso
-        response = self.client.post(
-            "/api/v1/auth/login",
-            json={"usuario": "test_admin", "contrasena": "test_pass"}
-        )
-        self.assertEqual(response.status_code, 200)
-        payload = response.json()
-        self.assertEqual(payload["message"], "Autenticacion correcta")
-        self.assertEqual(payload["usuario"]["usuario"], "test_admin")
 
-        # 2. Login fallido por contraseña errónea
-        response_failed = self.client.post(
-            "/api/v1/auth/login",
-            json={"usuario": "test_admin", "contrasena": "clave_incorrecta"}
-        )
-        self.assertEqual(response_failed.status_code, 401)
 
     def test_create_and_patch_cajas(self):
         """Verifica que se puedan crear y modificar propiedades parciales de las cajas en tiempo real."""
@@ -179,30 +161,7 @@ class TestApiPostEndpoints(unittest.TestCase):
         response_not_found = self.client.delete(f"/api/v1/empleados/{emp_id}")
         self.assertEqual(response_not_found.status_code, 404)
 
-    def test_create_and_delete_usuario(self):
-        """Verifica el alta, login y posterior baja de un usuario del sistema."""
-        # 1. Crear usuario nuevo
-        response_create = self.client.post(
-            "/api/v1/usuarios",
-            json={"usuario": "nuevo_usuario", "contrasena": "pass123"}
-        )
-        self.assertEqual(response_create.status_code, 201)
-        u_id = response_create.json()["id"]
 
-        # 2. Validar login con el nuevo usuario
-        response_login = self.client.post(
-            "/api/v1/auth/login",
-            json={"usuario": "nuevo_usuario", "contrasena": "pass123"}
-        )
-        self.assertEqual(response_login.status_code, 200)
-
-        # 3. Eliminar usuario
-        response_delete = self.client.delete(f"/api/v1/usuarios/{u_id}")
-        self.assertEqual(response_delete.status_code, 204)
-
-        # 4. Intentar eliminar de nuevo (debe dar 404)
-        response_del_fail = self.client.delete(f"/api/v1/usuarios/{u_id}")
-        self.assertEqual(response_del_fail.status_code, 404)
 
     def test_crear_metrica(self):
         """Verifica el registro de nuevas métricas globales y por caja."""

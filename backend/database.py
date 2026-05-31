@@ -20,7 +20,6 @@ class DatabaseMSQ:
     - cajas y su estado (cajas)
     - métricas operativas (metricas)
     - empleados (empleados)
-    - usuarios para autenticación (usuarios)
     - turnos y órdenes de turno (turnos)
     """
 
@@ -60,8 +59,8 @@ class DatabaseMSQ:
         self._create_tabla_cajas()
         self._create_tabla_metricas()
         self._create_tabla_empleados()
-        self._create_tabla_usuarios()
-        self._ensure_default_admin()
+        self.cursor.execute("DROP TABLE IF EXISTS usuarios")
+        self.conn.commit()
         self._ensure_default_empleados()
         self._create_tabla_turnos()
         self._ensure_default_turnos()
@@ -82,9 +81,7 @@ class DatabaseMSQ:
     def _row_to_dict(self, row: sqlite3.Row | Tuple[Any, ...], columns: Sequence[str]) -> Dict[str, Any]:
         return {column: row[index] for index, column in enumerate(columns)}
 
-    # Hash de contraseña simple usando SHA256. No es recomendado para producción, pero suficiente para este caso de uso.
-    def _password_hash(self, password: str) -> str:
-        return hashlib.sha256(password.encode("utf-8")).hexdigest()
+
 
     # Devuelve la fecha/hora actual en formato ISO 8601, para uso consistente en timestamps.
     def _now_iso(self) -> str:
@@ -155,34 +152,7 @@ class DatabaseMSQ:
         )
         self.conn.commit()
 
-    # Crea la tabla de usuarios para el frontend, que almacena credenciales de acceso con contraseñas hasheadas.
-    def _create_tabla_usuarios(self) -> None:
-        self.cursor.execute(
-            """
-            CREATE TABLE IF NOT EXISTS usuarios (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                usuario TEXT NOT NULL UNIQUE,
-                password_hash TEXT NOT NULL,
-                activo INTEGER NOT NULL DEFAULT 1,
-                creado_en TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                actualizado_en TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-            )
-            """
-        )
-        self.conn.commit()
 
-    # Asegura que exista el usuario admin por defecto si la tabla está vacía.
-    def _ensure_default_admin(self) -> None:
-        self.cursor.execute("SELECT COUNT(*) FROM usuarios")
-        if self.cursor.fetchone()[0] == 0:
-            self.cursor.execute(
-                """
-                INSERT INTO usuarios (usuario, password_hash, activo, creado_en, actualizado_en)
-                VALUES (?, ?, 1, ?, ?)
-                """,
-                ("admin", self._password_hash("1234"), self._now_iso(), self._now_iso()),
-            )
-            self.conn.commit()
 
     # Asegura que existan los 6 empleados de base con nombres valencianos si la tabla está vacía.
     def _ensure_default_empleados(self) -> None:
@@ -800,99 +770,7 @@ class DatabaseMSQ:
         self.conn.commit()
         return self.cursor.rowcount > 0
     
-    # ------------------------------------------------------------------
-    # Operaciones sobre usuarios del frontend
-    # ------------------------------------------------------------------
 
-    # Método para crear un nuevo usuario en la base de datos, con nombre de usuario y contraseña (almacenada como hash) para acceso al frontend.
-    def crear_usuario(self, usuario: str, contraseña: str) -> int:
-        """Crea un nuevo usuario para acceso al frontend.
-
-        Almacena la contraseña hasheada con SHA256 (nunca en texto plano).
-
-        Args:
-            usuario: Nombre de usuario único para login.
-            contraseña: Contraseña en texto plano (se hashea automáticamente).
-
-        Returns:
-            ID del usuario creado.
-
-        Raises:
-            sqlite3.IntegrityError: Si el usuario ya existe.
-
-        Example:
-            with DatabaseMSQ() as db:
-                user_id = db.crear_usuario("admin", "mi_password_segura")
-                print(f"Usuario creado con ID: {user_id}")
-        """
-        self.cursor.execute(
-            """
-            INSERT INTO usuarios (usuario, password_hash, activo, creado_en, actualizado_en)
-            VALUES (?, ?, 1, ?, ?)
-            """,
-            (usuario, self._password_hash(contraseña), self._now_iso(), self._now_iso()),
-        )
-        self.conn.commit()
-        return int(self.cursor.lastrowid)
-
-    # Método para autenticar un usuario del frontend contra las credenciales registradas, validando existencia, estado activo y contraseña correcta.
-    def autenticar_usuario(self, usuario: str, contraseña: str) -> Optional[Dict[str, Any]]:
-        """Autentica un usuario del frontend contra las credenciales registradas.
-
-        Valida que el usuario exista, esté activo, y la contraseña sea correcta.
-
-        Args:
-            usuario: Nombre de usuario a autenticar.
-            contraseña: Contraseña en texto plano (se hashea para comparar).
-
-        Returns:
-            Dict con datos del usuario (id, usuario, activo, creado_en, actualizado_en)
-            si la autenticación es exitosa. None si falla (usuario no existe, inactivo o pwd incorrecta).
-
-        Example:
-            with DatabaseMSQ() as db:
-                user = db.autenticar_usuario("admin", "mi_password_segura")
-                if user:
-                    print(f"Autenticado: {user['usuario']}")
-                else:
-                    print("Autenticación fallida")
-        """
-        self.cursor.execute(
-            """
-            SELECT id, usuario, password_hash, activo, creado_en, actualizado_en
-            FROM usuarios
-            WHERE usuario = ?
-            """,
-            (usuario,),
-        )
-        row = self.cursor.fetchone()
-        if row is None:
-            return None
-
-        datos = self._row_to_dict(row, ["id", "usuario", "password_hash", "activo", "creado_en", "actualizado_en"])
-        datos["activo"] = bool(datos["activo"])
-        
-        if not datos["activo"]:
-            return None
-        if datos["password_hash"] != self._password_hash(contraseña):
-            return None
-
-        datos.pop("password_hash", None)
-        return datos
-
-    # Método para eliminar un usuario del frontend de la base de datos, identificándolo por su ID. Retorna True si se eliminó, False si no existía.
-    def eliminar_usuario(self, id_usuario: int) -> bool:
-        """Elimina un usuario del frontend de la base de datos.
-
-        Args:
-            id_usuario: ID del usuario a eliminar.
-
-        Returns:
-            True si el usuario existía y se eliminó, False en caso contrario.
-        """
-        self.cursor.execute("DELETE FROM usuarios WHERE id = ?", (id_usuario,))
-        self.conn.commit()
-        return self.cursor.rowcount > 0
 
     # ------------------------------------------------------------------
     # Turnos y estado de cajas

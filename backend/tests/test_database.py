@@ -111,25 +111,7 @@ class TestDatabaseMSQ(unittest.TestCase):
         self.assertTrue(exito)
         self.assertIsNone(self.db.obtener_empleado(emp_id))
 
-    # --- 5. USUARIOS ---
-    def test_usuarios(self):
 
-        # Verificar Admin por defecto
-        admin = self.db.autenticar_usuario("admin", "1234")
-        self.assertIsNotNone(admin)
-        self.assertEqual(admin["usuario"], "admin")
-        
-        # Autenticación fallida
-        mal = self.db.autenticar_usuario("admin", "wrong")
-        self.assertIsNone(mal)
-        
-        # Crear, confirmar y borrar nuevo usuario
-        u_id = self.db.crear_usuario("testuser", "testpwd")
-        nuevo = self.db.autenticar_usuario("testuser", "testpwd")
-        self.assertIsNotNone(nuevo)
-        
-        self.db.eliminar_usuario(u_id)
-        self.assertIsNone(self.db.autenticar_usuario("testuser", "testpwd"))
 
     # --- 6. TURNOS ---
     def test_turnos(self):

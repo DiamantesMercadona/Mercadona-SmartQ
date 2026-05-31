@@ -64,16 +64,6 @@ class EmpleadoUpdate(BaseModel):
     activo: bool | None = None
 
 
-class LoginRequest(BaseModel):
-    usuario: str
-    contrasena: str
-
-
-class UsuarioCreate(BaseModel):
-    usuario: str
-    contrasena: str
-
-
 class TurnoUpdate(BaseModel):
     dia_semana: str
     turno: str
@@ -233,46 +223,6 @@ async def eliminar_empleado(id_empleado: int):
             eliminado = db.eliminar_empleado(id_empleado)
         if not eliminado:
             raise HTTPException(status_code=404, detail="Empleado no encontrado")
-        return Response(status_code=status.HTTP_204_NO_CONTENT)
-    except HTTPException:
-        raise
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
-
-
-@router.post("/usuarios", status_code=status.HTTP_201_CREATED)
-async def crear_usuario(usuario: UsuarioCreate):
-    try:
-        with DatabaseMSQ() as db:
-            usuario_id = db.crear_usuario(usuario.usuario, usuario.contrasena)
-        return {"message": "Usuario creado correctamente", "id": usuario_id}
-    except sqlite3.IntegrityError as exc:
-        raise HTTPException(status_code=409, detail=f"No se pudo crear el usuario: {exc}")
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
-
-
-@router.post("/auth/login")
-async def login(credentials: LoginRequest):
-    try:
-        with DatabaseMSQ() as db:
-            usuario = db.autenticar_usuario(credentials.usuario, credentials.contrasena)
-        if usuario is None:
-            raise HTTPException(status_code=401, detail="Credenciales invalidas")
-        return {"message": "Autenticacion correcta", "usuario": usuario}
-    except HTTPException:
-        raise
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
-
-
-@router.delete("/usuarios/{id_usuario}", status_code=status.HTTP_204_NO_CONTENT)
-async def eliminar_usuario(id_usuario: int):
-    try:
-        with DatabaseMSQ() as db:
-            eliminado = db.eliminar_usuario(id_usuario)
-        if not eliminado:
-            raise HTTPException(status_code=404, detail="Usuario no encontrado")
         return Response(status_code=status.HTTP_204_NO_CONTENT)
     except HTTPException:
         raise

@@ -2,7 +2,7 @@
 
 ## Introducción
 
-`DatabaseMSQ` es el gestor centralizado de base de datos SQLite, que proporciona un acceso unificado y tipado a todas las entidades del sistema: instantáneas, cajas, métricas, empleados, usuarios y turnos.
+`DatabaseMSQ` es el gestor centralizado de base de datos SQLite, que proporciona un acceso unificado y tipado a todas las entidades del sistema: instantáneas, cajas, métricas, empleados y turnos.
 
 ---
 
@@ -97,26 +97,7 @@ Ejemplo de empleado:
 }
 ```
 
-### **5. usuarios**
-Usuarios para autenticación en el frontend.
 
-```
-id, usuario, password_hash, activo, creado_en, actualizado_en
-```
-
-Ejemplo de usuario:
-```json
-{
-    "id": 1,
-    "usuario": "admin",
-    "password_hash": "5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d154",
-    "activo": true,
-    "creado_en": "2026-05-18T09:00:00Z",
-    "actualizado_en": "2026-05-18T09:00:00Z"
-}
-```
-
-> **Importante:** Al inicializar la base de datos por primera vez, el sistema creará automáticamente un usuario administrador predeterminado si la tabla está vacía. Sus credenciales de acceso iniciales serán **usuario**: `admin`, **contraseña**: `1234`. Se recomienda cambiar esta contraseña posteriormente o dar de alta un usuario definitivo.
 
 ### **6. turnos**
 Programación semanal de empleados por día y franja.
@@ -332,36 +313,7 @@ with DatabaseMSQ() as db:
     exito = db.eliminar_empleado(id_empleado=1)
 ```
 
----
 
-### 5. Usuarios (Frontend)
-
-Comprende las credenciales privadas y encriptadas de los administradores que acceden a la interfaz de gestión.
-
-**`crear_usuario`**:
-Crea un usuario mediante la generación interna de hash criptográfico estándar (SHA-256). Nunca se guarda en texto claro la contraseña proporcionada de entrada.
-```python
-with DatabaseMSQ() as db:
-    user_id = db.crear_usuario(usuario="admin", contraseña="MiPassword123")
-```
-
-**`autenticar_usuario`**:
-Verifica las credenciales evaluando ambos hashes de comparación. Si coinciden, devuelve la instancia del objeto usuario desde SQLite (y sin su password), validando así la sesión para el frontend, y en caso contrario, se devuelve `None`.
-```python
-with DatabaseMSQ() as db:
-    user = db.autenticar_usuario(usuario="admin", contraseña="MiPassword123")
-    if user:
-        print("Autenticación exitosa")
-```
-
-**`eliminar_usuario`**:
-Revoca permanentemente y borra la cuenta de un usuario.
-```python
-with DatabaseMSQ() as db:
-    exito = db.eliminar_usuario(id_usuario=1)
-```
-
----
 
 ### 6. Turnos
 
