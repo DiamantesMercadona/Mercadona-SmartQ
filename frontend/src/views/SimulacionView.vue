@@ -16,35 +16,60 @@
     <!-- Metrics Cards Row -->
     <section class="metrics-row">
       <div class="metric-card">
-        <div class="metric-icon">{{ congestionLevel.icon }}</div>
+        <div class="metric-icon">
+          <!-- Speedometer SVG Icon representing congestion level -->
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.2" stroke="currentColor" :class="['metric-svg-icon', congestionLevel.class]" style="width: 24px; height: 24px;">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15.22 14.78a5 5 0 00-6.44 0M9 21h6m-3-9v4m-3.52 1.48L6 14m12 0l-2.48 3.48M12 3a9 9 0 00-9 9m9-9a9 9 0 019 9" />
+          </svg>
+        </div>
         <div class="metric-details">
           <span class="metric-label">Nivel de congestión</span>
           <span :class="['metric-value', congestionLevel.class]">{{ congestionLevel.text }}</span>
         </div>
       </div>
       <div class="metric-card">
-        <div class="metric-icon">🛒</div>
+        <div class="metric-icon">
+          <!-- Shopping Cart SVG Icon -->
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.2" stroke="currentColor" style="width: 24px; height: 24px; color: #00843d;">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z" />
+          </svg>
+        </div>
         <div class="metric-details">
           <span class="metric-label">Cajas abiertas</span>
           <span class="metric-value">{{ activeCajasCount }} / 6</span>
         </div>
       </div>
       <div class="metric-card">
-        <div class="metric-icon">👥</div>
+        <div class="metric-icon">
+          <!-- People SVG Icon -->
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.2" stroke="currentColor" style="width: 24px; height: 24px; color: #00843d;">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.109A11.386 11.386 0 0110.089 21m-4.212-1.484A9.38 9.38 0 013 19.128v-.109A11.383 11.383 0 018.828 21m1.08-1.872a4.123 4.123 0 00-.08-.474m0 0V15m0 0a4.125 4.125 0 00-7.533 2.493M9 11.25a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
+          </svg>
+        </div>
         <div class="metric-details">
           <span class="metric-label">Clientes en cola</span>
           <span class="metric-value">{{ totalQueueLength }}</span>
         </div>
       </div>
       <div class="metric-card">
-        <div class="metric-icon">⏱️</div>
+        <div class="metric-icon">
+          <!-- Clock/Timer SVG Icon -->
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.2" stroke="currentColor" style="width: 24px; height: 24px; color: #00843d;">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </div>
         <div class="metric-details">
           <span class="metric-label">Tiempo medio de espera</span>
           <span class="metric-value">{{ formattedAverageWaitTime }} min</span>
         </div>
       </div>
       <div class="metric-card">
-        <div class="metric-icon">🧑‍✈️</div>
+        <div class="metric-icon">
+          <!-- Cashier Badge SVG Icon -->
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.2" stroke="currentColor" style="width: 24px; height: 24px; color: #00843d;">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M17.982 18.725A7.488 7.488 0 0012 15.75a7.488 7.488 0 00-5.982 2.975m11.963 0a9 9 0 10-11.963 0m11.963 0A8.966 8.966 0 0112 21a8.966 8.966 0 01-5.982-2.275M15 9.75a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+        </div>
         <div class="metric-details">
           <span class="metric-label">Siguiente cajero</span>
           <span class="metric-value" :class="nextEmployeeOnDutyClass">{{ nextEmployeeOnDuty }}</span>
@@ -79,7 +104,12 @@
           </div>
 
           <div v-if="wsStatus !== 'connecting' && !isConnected" class="offline-overlay">
-            <div class="offline-logo">🔌</div>
+            <div class="offline-logo">
+              <!-- Disconnected alert warning SVG Icon -->
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.2" stroke="currentColor" style="width: 48px; height: 48px; color: #d71920;">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+              </svg>
+            </div>
             <h3>Se ha perdido la conexión</h3>
             <p>Se ha perdido la conexión con la cámara. Por favor, reintenta la conexión para restablecer el flujo de vídeo en tiempo real.</p>
             <button @click="connectWs" class="btn-connect-overlay">Reconectar con la cámara</button>
@@ -232,15 +262,15 @@ const nextEmployeeOnDutyClass = computed(() => {
 // Calcular nivel de congestión dinámico basado en las colas y tiempos de espera
 const congestionLevel = computed(() => {
   if (queues.value.filter(q => q.status !== 'cerrada').length === 0) {
-    return { text: 'Fluido', class: 'bajo', icon: '🟢' }
+    return { text: 'Fluido', class: 'bajo' }
   }
   const waitMin = realAverageWaitSeconds.value / 60
   if (waitMin < 1.5) {
-    return { text: 'Fluido', class: 'bajo', icon: '🟢' }
+    return { text: 'Fluido', class: 'bajo' }
   } else if (waitMin < 3.0) {
-    return { text: 'Moderado', class: 'medio', icon: '🟡' }
+    return { text: 'Moderado', class: 'medio' }
   } else {
-    return { text: 'Saturado', class: 'alto', icon: '🔴' }
+    return { text: 'Saturado', class: 'alto' }
   }
 })
 
@@ -665,6 +695,13 @@ h1 {
 .metric-value.bajo { color: #00843d; }
 .metric-value.medio { color: #ca8a04; }
 .metric-value.alto { color: #d71920; }
+
+.metric-svg-icon {
+  transition: color 0.25s ease;
+}
+.metric-svg-icon.bajo { color: #00843d; }
+.metric-svg-icon.medio { color: #ca8a04; }
+.metric-svg-icon.alto { color: #d71920; }
 
 /* Grid principal */
 .main-grid {
