@@ -10,7 +10,7 @@ export const simulationSpeed = ref(10)
 //  Comportamiento de colas
 
 /** Si es true, al abrir una caja los clientes en espera se redistribuyen equitativamente. */
-export const nivelarColasAlAbrir = ref(false)
+export const nivelarColasAlAbrir = ref(true)
 
 export const oleadasRandom = ref(false)
 
