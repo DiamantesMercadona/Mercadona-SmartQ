@@ -323,8 +323,7 @@ onMounted(loadData)
           <div>
             <h1>Gestión de empleados</h1>
             <p>
-              Organiza el personal por turnos de lunes a sábado usando los datos guardados en la
-              base de datos.
+              Consulta y modifica la plantilla de empleados y su asignación de turnos.
             </p>
           </div>
 

@@ -50,8 +50,8 @@
             </svg>
           </span>
           <span>
-            <strong>Graficas y métricas</strong>
-            <small>Consulta información histórica sobre tiempos de espera, tendencias, y metricas por caja y fecha.</small>
+            <strong>Gráficas y estadísticas</strong>
+            <small>Consulta información histórica sobre tiempos de espera, tendencias, y métricas por caja y fecha.</small>
           </span>
         </RouterLink>
       </div>

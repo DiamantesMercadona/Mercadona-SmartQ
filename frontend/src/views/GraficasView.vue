@@ -70,7 +70,7 @@ const loadMetrics = async () => {
     errorMessage.value =
       error instanceof Error
         ? `${error.message}. Revisa que el backend exponga GET /api/v1/metricas.`
-        : 'No se han podido cargar las metricas.'
+        : 'No se han podido cargar las métricas.'
   } finally {
     loading.value = false
   }
@@ -210,7 +210,7 @@ onMounted(loadMetrics)
           <div>
             <h1>Gráficas y estadísticas</h1>
             <p>
-              Consulta la evolución del tiempo medio de espera registrado en la tabla de métricas.
+              Consulta información histórica sobre tiempos de espera, tendencias, y métricas por caja y fecha.
             </p>
           </div>
 
@@ -251,7 +251,7 @@ onMounted(loadMetrics)
       <p v-if="errorMessage" class="status-message error" role="alert">{{ errorMessage }}</p>
       <p v-else-if="loading" class="status-message">Cargando métricas...</p>
 
-      <section class="stats-grid" aria-label="Resumen de metricas">
+      <section class="stats-grid" aria-label="Resumen de métricas">
         <article class="stat-card">
           <span>Espera actual</span>
           <strong>{{ formatSeconds(latestMetric?.waitSeconds ?? 0) }}</strong>

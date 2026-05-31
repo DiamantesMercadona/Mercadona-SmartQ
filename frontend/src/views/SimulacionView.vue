@@ -9,7 +9,7 @@
           <span class="kicker">SmartQ</span>
           <h1>Monitor de colas</h1>
         </div>
-        <p class="subtitle">Monitorización en tiempo real del flujo de clientes y análisis de colas de las cajas</p>
+        <p class="subtitle">Visualiza el flujo de clientes, el estado de las colas en tiempo real, y ejecuta acciones manuales.</p>
       </div>
     </header>
 
@@ -62,7 +62,7 @@
             Cajas de la salida de calle Roger de Lauria
           </span>
           <span class="visualizer-stats" v-if="isConnected">
-            Actualizando en tiempo real | {{ fpsDisplay }} fps
+            Actualizando en tiempo real | {{ fpsDisplay }} FPS
           </span>
         </div>
 
