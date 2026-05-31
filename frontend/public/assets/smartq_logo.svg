@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 268 108" width="268" height="108" role="img" aria-label="SmartQ Queue Manager">
+
+  <!--
+    SmartQ wordmark
+    font-size 56px ≈ 3.2rem · font-weight 800 · letter-spacing -0.03em
+  -->
+  <text
+    x="0"
+    y="60"
+    font-family="Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+    font-size="56"
+    font-weight="800"
+    letter-spacing="-1.7">
+    <tspan fill="#173326">Smart</tspan><tspan fill="#009f49">Q</tspan>
+  </text>
+
+  <!-- "QUEUE MANAGER" pill background -->
+  <rect
+    x="1"
+    y="72"
+    width="152"
+    height="24"
+    rx="4"
+    fill="#dfeee5"/>
+
+  <!-- "QUEUE MANAGER" label -->
+  <text
+    x="9"
+    y="89"
+    font-family="Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+    font-size="12.5"
+    font-weight="700"
+    letter-spacing="1.56"
+    fill="#00843d">QUEUE MANAGER</text>
+
+</svg>
